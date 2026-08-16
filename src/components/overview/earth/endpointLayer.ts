@@ -122,7 +122,13 @@ export const createEndpointLayer = (options: EndpointLayerOptions): EndpointLaye
     topHosts: endpoint.topHosts.map((host) => ({ ...host })),
   })
 
-  const rebuildMeshes = () => {
+  // InstancedMesh 只按容量创建、不足时才翻倍重建:拓扑每变一次(活跃代理下几乎每秒)
+  // 就 new 一对 InstancedMesh,three 会把旧 mesh 的 RenderObject/实例缓冲挂在共享
+  // material/geometry 的 dispose 闭包上,mesh.dispose() 并不摘除 —— 常驻页面即线性泄漏
+  let capacity = 0
+  const ensureMeshes = (needed: number) => {
+    if (endpointMesh && endpointGlowMesh && needed <= capacity) return
+
     if (endpointMesh) {
       earthGroup.remove(endpointMesh)
       endpointMesh.dispose()
@@ -132,13 +138,26 @@ export const createEndpointLayer = (options: EndpointLayerOptions): EndpointLaye
       endpointGlowMesh.dispose()
     }
 
-    const capacity = Math.max(1, endpoints.length)
+    capacity = Math.max(64, capacity * 2, needed)
     endpointMesh = new THREE.InstancedMesh(
       endpointGeometry,
       visualMode === 'flat' ? flatEndpointMaterial : endpointMaterial,
       capacity,
     )
     endpointGlowMesh = new THREE.InstancedMesh(endpointGlowGeometry, endpointGlowMaterial, capacity)
+    endpointMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage)
+    endpointGlowMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage)
+    // Draw the beads above the arcs and the halos last, so the additive glow
+    // blends over everything already on screen.
+    endpointMesh.renderOrder = 5
+    endpointGlowMesh.renderOrder = 6
+    earthGroup.add(endpointMesh, endpointGlowMesh)
+  }
+
+  const rebuildMeshes = () => {
+    ensureMeshes(endpoints.length)
+    if (!endpointMesh || !endpointGlowMesh) return
+
     endpointMesh.count = endpoints.length
     endpointGlowMesh.count = endpoints.length
     endpointGlowMesh.visible = visualMode === 'space'
@@ -159,11 +178,9 @@ export const createEndpointLayer = (options: EndpointLayerOptions): EndpointLaye
     endpointGlowMesh.instanceMatrix.needsUpdate = true
     if (endpointMesh.instanceColor) endpointMesh.instanceColor.needsUpdate = true
     if (endpointGlowMesh.instanceColor) endpointGlowMesh.instanceColor.needsUpdate = true
-    // Draw the beads above the arcs and the halos last, so the additive glow
-    // blends over everything already on screen.
-    endpointMesh.renderOrder = 5
-    endpointGlowMesh.renderOrder = 6
-    earthGroup.add(endpointMesh, endpointGlowMesh)
+    // hitTest 的 raycast 依赖包围球,实例集合变了要让它按新的 count 重算
+    endpointMesh.boundingSphere = null
+    endpointGlowMesh.boundingSphere = null
   }
 
   return {

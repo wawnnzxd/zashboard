@@ -137,12 +137,21 @@ export const createEarthRenderer = async (
       endpointLayer.setSunDirection(sunDirection)
     }
 
+    // 按需渲染:画面没有任何变化的帧(自转暂停、扁平模式无脉冲、无流光、相机静止、
+    // 无新数据)不再每帧 render + CSS2D 全量遍历;有变化才画
+    let renderRequested = true
+
     const render = () => {
       if (!disposed && visible && intersecting) {
+        renderRequested = false
         cityLabelLayer.updateVisibility()
         renderer.render(scene, camera)
         labelRenderer.render(scene, camera)
       }
+    }
+    const requestRender = () => {
+      renderRequested = true
+      if (reducedMotion) render()
     }
 
     const animate = () => {
@@ -153,10 +162,19 @@ export const createEarthRenderer = async (
       if (autoRotation) earthGroup.rotation.y += delta * 0.025
       endpointLayer.update(delta)
       if (visualMode === 'space') globeLayer.syncSunLight()
-      controls.update(delta)
-      routeLayer.update(elapsed)
+      const cameraMoved = controls.update(delta)
+      const flowsActive = routeLayer.update(elapsed)
 
-      render()
+      if (
+        renderRequested ||
+        autoRotation ||
+        cameraMoved ||
+        flowsActive ||
+        // 太空模式的端点光晕在脉冲、日照随时间移动
+        visualMode === 'space'
+      ) {
+        render()
+      }
     }
 
     const updateAnimationLoop = () => {
@@ -169,6 +187,7 @@ export const createEarthRenderer = async (
 
       if (visualMode === 'space') updateSunForTime()
 
+      renderRequested = true
       if (reducedMotion) {
         controls.enableDamping = false
         render()
@@ -241,12 +260,12 @@ export const createEarthRenderer = async (
 
     const sunTimer = window.setInterval(() => {
       if (visualMode === 'space') updateSunForTime()
-      if (reducedMotion) render()
+      requestRender()
     }, 60_000)
     registerCleanup(() => window.clearInterval(sunTimer))
 
     const onControlsChange = () => {
-      if (reducedMotion) render()
+      requestRender()
     }
     controls.addEventListener('change', onControlsChange)
     registerCleanup(() => controls.removeEventListener('change', onControlsChange))
@@ -263,7 +282,7 @@ export const createEarthRenderer = async (
         routeLayer.setSnapshot(snapshot, topologyChanged)
         const endpoints = endpointLayer.setSnapshot(snapshot, topologyChanged)
         cityLabelLayer.setEndpoints(endpoints)
-        if (reducedMotion) render()
+        requestRender()
       },
       setInitialLocation(location) {
         if (
@@ -289,7 +308,7 @@ export const createEarthRenderer = async (
           .normalize()
         camera.position.copy(controls.target).addScaledVector(direction, distance)
         controls.update()
-        render()
+        requestRender()
       },
       setReducedMotion(value) {
         if (disposed) return
@@ -299,11 +318,13 @@ export const createEarthRenderer = async (
       setAutoRotation(enabled) {
         if (disposed) return
         autoRotation = enabled
+        requestRender()
       },
       setCityLabelsVisible(nextVisible) {
         if (disposed) return
         cityLabelLayer.setVisible(nextVisible)
-        render()
+        // CSS2DRenderer 会在下一帧把不可见分组的标签置为 display:none,需要再画一帧
+        requestRender()
       },
       setVisualMode(mode) {
         if (disposed || visualMode === mode) return
@@ -311,14 +332,14 @@ export const createEarthRenderer = async (
         globeLayer.setVisualMode(mode)
         routeLayer.setVisualMode(mode)
         endpointLayer.setVisualMode(mode)
-        render()
+        requestRender()
       },
       setColorScheme(scheme) {
         if (disposed || colorScheme === scheme) return
         colorScheme = scheme
         globeLayer.setColorScheme(scheme)
         routeLayer.setColorScheme(scheme)
-        if (visualMode === 'flat') render()
+        requestRender()
       },
       dispose: disposeResources,
     }
