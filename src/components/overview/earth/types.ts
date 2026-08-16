@@ -60,3 +60,5 @@ export type GeoWorkerResponse =
       recoveredCorruptCache?: boolean
     }
   | { type: 'lookup'; id: number; locations: Record<string, EarthLocation | null> }
+  // 前台/后台下载的起止(宿主据此在下载期间不回收 Worker)
+  | { type: 'activity'; downloading: boolean }

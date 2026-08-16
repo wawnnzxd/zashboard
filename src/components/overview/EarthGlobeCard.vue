@@ -321,11 +321,12 @@ import {
   PauseIcon,
   PlayIcon,
 } from '@heroicons/vue/24/outline'
-import { useMediaQuery } from '@vueuse/core'
+import { useDocumentVisibility, useElementVisibility, useMediaQuery } from '@vueuse/core'
 import * as ipaddr from 'ipaddr.js'
 import type { CSSProperties } from 'vue'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { acquireGeoWorker, postGeoWorker, releaseGeoWorker } from './earth/geoWorkerHost'
 import { buildEarthRoutes } from './earth/routes'
 import {
   DBIP_COMPRESSED_BYTES,
@@ -361,12 +362,19 @@ const reducedMotion = useMediaQuery('(prefers-reduced-motion: reduce)')
 const locationCache = new Map<string, EarthLocation | null>()
 const lookupRequests = new Map<number, (locations: Record<string, EarthLocation | null>) => void>()
 let lookupID = 0
-let worker: Worker | null = null
 let refreshTimer: ReturnType<typeof setTimeout> | null = null
 let refreshRunning = false
 let refreshQueued = false
+let refreshPending = false
 let disposed = false
+let rendererFailed = false
 let originRequestID = 0
+
+// 卡片滚出视口 / 标签页在后台时,每秒的连接快照不再驱动路由聚合与图层更新
+//(渲染器内部已按相交状态停画,但聚合管线原本仍在照跑),回到可见补刷一次
+const cardVisible = useElementVisibility(canvasRef)
+const documentVisibility = useDocumentVisibility()
+const isCardHidden = () => !cardVisible.value || documentVisibility.value !== 'visible'
 
 // 初始化 Worker 与 three/webgpu 渲染器开销较大,先让路由切换动画跑完(0.35s)再在空闲时段执行,
 // 否则移动端切到概览页时主线程被占满,页面要卡一两秒才出现。
@@ -431,7 +439,7 @@ const tooltipStyle = computed<CSSProperties>(() => ({
   top: `${Math.min(window.innerHeight - 100, tooltipPosition.value.y + 12)}px`,
 }))
 
-const postWorker = (message: GeoWorkerRequest) => worker?.postMessage(message)
+const postWorker = (message: GeoWorkerRequest) => postGeoWorker(message)
 
 const lookupLocations = async (ips: string[], locale: string) => {
   const result: Record<string, EarthLocation | null> = {}
@@ -465,6 +473,8 @@ const lookupLocations = async (ips: string[], locale: string) => {
 }
 
 const refreshRoutes = async () => {
+  // 渲染器初始化失败(WebGPU/WebGL 都不可用)后再算路由也无处可画
+  if (rendererFailed) return
   if (refreshRunning) {
     refreshQueued = true
     return
@@ -511,6 +521,11 @@ const refreshRoutes = async () => {
 }
 
 const scheduleRouteRefresh = () => {
+  if (isCardHidden()) {
+    refreshPending = true
+    return
+  }
+  refreshPending = false
   if (refreshTimer) clearTimeout(refreshTimer)
   refreshTimer = setTimeout(() => {
     refreshTimer = null
@@ -518,10 +533,30 @@ const scheduleRouteRefresh = () => {
   }, 150)
 }
 
+watch([cardVisible, documentVisibility], () => {
+  if (refreshPending && !isCardHidden()) scheduleRouteRefresh()
+})
+
 const cachedOriginIP = () => {
   const info = earthOriginSource.value === 'global' ? ipForGlobal.value : ipForChina.value
   return info.ipWithPrivacy.find(isValidIP) ?? ''
 }
+
+// 「网络信息」卡挂载时已在请求同一批公网 IP 接口(共享 ref 此时还是"获取中"),
+// 这里先等它的结果落地再决定是否自己再发一次,避免首屏对 ipip.net / ip.sb 重复请求
+const waitForSharedOriginIP = (timeout: number) =>
+  new Promise<string>((resolve) => {
+    const finish = (value: string) => {
+      stop()
+      clearTimeout(timer)
+      resolve(value)
+    }
+    const timer = setTimeout(() => finish(''), timeout)
+    const stop = watch([ipForChina, ipForGlobal], () => {
+      const ip = cachedOriginIP()
+      if (ip) finish(ip)
+    })
+  })
 
 const loadOrigin = async (force = false) => {
   const requestID = ++originRequestID
@@ -539,6 +574,18 @@ const loadOrigin = async (force = false) => {
   originIP.value = ''
   routeCount.value = 0
   renderer.value?.setRoutes([])
+
+  if (!force) {
+    const shared = await waitForSharedOriginIP(2500)
+
+    if (requestID !== originRequestID || source !== earthOriginSource.value) return
+    if (shared) {
+      originIP.value = shared
+      originStatus.value = 'ready'
+      scheduleRouteRefresh()
+      return
+    }
+  }
 
   try {
     if (source === 'global') {
@@ -587,7 +634,8 @@ const retry = () => {
   if (databaseStatus.value === 'ready' && originStatus.value === 'ready') scheduleRouteRefresh()
 }
 
-const handleWorkerMessage = ({ data }: MessageEvent<GeoWorkerResponse>) => {
+const handleWorkerMessage = (data: GeoWorkerResponse) => {
+  if (data.type === 'activity') return
   if (data.type === 'lookup') {
     lookupRequests.get(data.id)?.(data.locations)
     lookupRequests.delete(data.id)
@@ -649,9 +697,7 @@ watch(
 const initialize = async () => {
   if (disposed) return
 
-  worker = new Worker(new URL('./earth/geoip.worker.ts', import.meta.url), { type: 'module' })
-  worker.addEventListener('message', handleWorkerMessage)
-  postWorker({ type: 'init' })
+  acquireGeoWorker(handleWorkerMessage)
   void loadOrigin()
 
   await nextTick()
@@ -679,6 +725,10 @@ const initialize = async () => {
   } catch {
     canvasRef.value?.replaceChildren()
     rendererError.value = t('earthRendererError')
+    // 没有渲染器就不需要城市库与每秒的路由聚合了
+    rendererFailed = true
+    if (refreshTimer) clearTimeout(refreshTimer)
+    releaseGeoWorker(handleWorkerMessage)
   }
 }
 
@@ -717,9 +767,7 @@ onBeforeUnmount(() => {
   if (initIdleHandle !== null) cancelIdleCallback(initIdleHandle)
   renderer.value?.dispose()
   renderer.value = undefined
-  worker?.removeEventListener('message', handleWorkerMessage)
-  worker?.terminate()
-  worker = null
+  releaseGeoWorker(handleWorkerMessage)
   lookupRequests.clear()
 })
 </script>

@@ -20,12 +20,19 @@ if (!(globalThis as { Buffer?: unknown }).Buffer) {
 const DATABASE_NAME = 'zashboard-earth-geoip'
 const DATABASE_STORE = 'city-database'
 const DATABASE_KEY = 'dbip-city-lite'
+const REFRESH_META_KEY = 'dbip-city-lite:refresh-meta'
 const DATABASE_TTL = 30 * 24 * 60 * 60 * 1000
+// 缓存过期后的后台刷新至少间隔这么久再试:失败(断网/CDN 抽风)不能每次进概览页都从零重下 61.7MB
+const REFRESH_RETRY_INTERVAL = 6 * 60 * 60 * 1000
 const STORAGE_HEADROOM = 16 * 1024 * 1024
 
 interface CachedDatabase {
   blob: Blob
   storedAt: number
+}
+
+interface RefreshMeta {
+  attemptedAt: number
 }
 
 class WorkerError extends Error {
@@ -64,9 +71,9 @@ const readCachedDatabase = async (): Promise<CachedDatabase | undefined> => {
       .getAll()
 
     request.onsuccess = () => {
-      const cached = (request.result as CachedDatabase[]).sort(
-        (left, right) => (right.storedAt || 0) - (left.storedAt || 0),
-      )[0]
+      const cached = (request.result as Partial<CachedDatabase>[])
+        .filter((record): record is CachedDatabase => record?.blob instanceof Blob)
+        .sort((left, right) => (right.storedAt || 0) - (left.storedAt || 0))[0]
 
       resolve(cached)
     }
@@ -101,6 +108,33 @@ const deleteCachedDatabase = async () => {
   }).finally(() => database.close())
 }
 
+const readRefreshMeta = async (): Promise<RefreshMeta | undefined> => {
+  const database = await openDatabase()
+
+  return new Promise<RefreshMeta | undefined>((resolve, reject) => {
+    const request = database
+      .transaction(DATABASE_STORE, 'readonly')
+      .objectStore(DATABASE_STORE)
+      .get(REFRESH_META_KEY)
+
+    request.onsuccess = () => resolve(request.result as RefreshMeta | undefined)
+    request.onerror = () => reject(request.error)
+  }).finally(() => database.close())
+}
+
+const writeRefreshMeta = async (value: RefreshMeta) => {
+  const database = await openDatabase()
+
+  return new Promise<void>((resolve, reject) => {
+    const transaction = database.transaction(DATABASE_STORE, 'readwrite')
+
+    transaction.objectStore(DATABASE_STORE).put(value, REFRESH_META_KEY)
+    transaction.oncomplete = () => resolve()
+    transaction.onerror = () => reject(transaction.error)
+    transaction.onabort = () => reject(transaction.error)
+  }).finally(() => database.close())
+}
+
 const createReader = async (blob: Blob) => {
   const databaseBuffer = await blob.arrayBuffer()
   const { Reader } = await import('mmdb-lib')
@@ -131,16 +165,35 @@ const init = async () => {
       post({ type: 'status', status: 'ready' })
 
       if (!Number.isFinite(cached.storedAt) || Date.now() - cached.storedAt > DATABASE_TTL) {
-        void download(true)
+        void refreshInBackground()
       }
-    } catch {
+    } catch (error) {
       reader = null
-      await deleteCachedDatabase().catch(() => {})
-      post({ type: 'status', status: 'idle', recoveredCorruptCache: true })
+      // 只有真正解析出"库损坏"才删缓存;arrayBuffer 内存不足 / 读取失败这类瞬时错误
+      // 若也删掉 130MB 缓存,就等于逼用户再下一次 61.7MB
+      if (error instanceof WorkerError && error.code === 'invalid') {
+        await deleteCachedDatabase().catch(() => {})
+        post({ type: 'status', status: 'idle', recoveredCorruptCache: true })
+      } else {
+        post({ type: 'status', status: 'error', error: 'unknown' })
+      }
     }
   } catch {
     post({ type: 'status', status: 'error', error: 'storage' })
   }
+}
+
+// 过期缓存的后台刷新:6 小时内只尝试一次,避免网络不好时每次进概览页都白下一段
+const refreshInBackground = async () => {
+  try {
+    const meta = await readRefreshMeta()
+
+    if (meta && Date.now() - meta.attemptedAt < REFRESH_RETRY_INTERVAL) return
+    await writeRefreshMeta({ attemptedAt: Date.now() })
+  } catch {
+    // 元数据读写失败不阻断刷新本身
+  }
+  void download(true)
 }
 
 const ensureStorageSpace = async () => {
@@ -184,6 +237,7 @@ const download = async (background = false) => {
 
   const controller = new AbortController()
   downloadController = controller
+  post({ type: 'activity', downloading: true })
 
   if (!background) {
     reader = null
@@ -199,10 +253,22 @@ const download = async (background = false) => {
 
     const total = Number(response.headers.get('content-length')) || undefined
     let received = 0
+    // 进度按 ≥1MB 或 ≥200ms 节流:61.7MB 按 16-64KB 一段到达就是数千条消息,
+    // 每条都在主线程触发一次响应式更新 + 两次 prettyBytes + DOM 写
+    let lastPostedBytes = 0
+    let lastPostedAt = 0
     const progressStream = new TransformStream<Uint8Array, Uint8Array>({
       transform(chunk, streamController) {
         received += chunk.byteLength
-        if (!background) post({ type: 'status', status: 'downloading', received, total })
+        if (!background) {
+          const now = Date.now()
+
+          if (received - lastPostedBytes >= 1024 * 1024 || now - lastPostedAt >= 200) {
+            lastPostedBytes = received
+            lastPostedAt = now
+            post({ type: 'status', status: 'downloading', received, total })
+          }
+        }
         streamController.enqueue(chunk)
       },
     })
@@ -257,6 +323,7 @@ const download = async (background = false) => {
     if (downloadController === controller) {
       downloadController = null
     }
+    post({ type: 'activity', downloading: false })
   }
 }
 
