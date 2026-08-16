@@ -18,7 +18,7 @@
       </button>
     </div>
     <button
-      class="btn btn-circle join-item btn-sm"
+      class="btn btn-circle btn-sm"
       v-if="customBackgroundURL"
       @click="displayBgProperty = !displayBgProperty"
     >
@@ -45,9 +45,6 @@
       max="100"
       v-model="dashboardTransparent"
       class="range max-w-64"
-      @touchstart.passive.stop
-      @touchmove.passive.stop
-      @touchend.passive.stop
     />
   </SettingItem>
   <SettingItem
@@ -63,9 +60,6 @@
       max="40"
       v-model="blurIntensity"
       class="range max-w-64"
-      @touchstart.stop
-      @touchmove.stop
-      @touchend.stop
     />
   </SettingItem>
 </template>

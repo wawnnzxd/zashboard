@@ -111,8 +111,6 @@ import { renderRoutes } from '@/helper'
 import { showNotification } from '@/helper/notification'
 import { getLabelFromBackend, isMiddleScreen } from '@/helper/utils'
 import { restartBackendSession, stopBackendSession } from '@/composables/backendSession'
-import { resumeConnections, stopConnections } from '@/store/connections'
-import { resumeSatistic, stopSatistic } from '@/store/overview'
 import { fetchProxies, resetProxies } from '@/assembly/proxies'
 import { isSidebarCollapsed } from '@/store/settings'
 import { activeBackend, activeUuid, backendList } from '@/store/setup'
@@ -240,18 +238,7 @@ watch(
 )
 
 watch(documentVisible, () => {
-  if (!activeUuid.value) {
-    return
-  }
-  if (documentVisible.value !== 'visible') {
-    // 后台标签页停掉秒级流(连接/traffic/memory):其解析与 Vue 响应链不受 rAF 节流,
-    // 挂机一晚就是数万轮全量处理。日志流保留避免丢历史;store 数据不清,回前台无缝续读。
-    stopConnections()
-    stopSatistic()
-    return
-  }
-  resumeConnections()
-  resumeSatistic()
+  if (documentVisible.value !== 'visible') return
   // 回前台补拉走 in-flight 去重 + 新鲜窗口,不再每次全量重下 MB 级代理数据
   fetchProxies({ maxAge: 5000 })
 })

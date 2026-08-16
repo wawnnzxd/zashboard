@@ -1,42 +1,39 @@
-// sing-box native(gRPC daemon.StartedService)后端的代理「组装逻辑」。
+// sing-box API(gRPC daemon.StartedService)后端的代理「组装逻辑」。
 // 与 clash 的「拉取式」不同,这里是「流驱动」:订阅 SubscribeGroups / SubscribeOutbounds,
 // 每次推送直接重建门面 index.ts 的共享状态,因此选择/测速后无需手动刷新,
 // 结果会随流自动回填到 UI。
 import { getSingboxClient } from '@/api/singbox/client'
 import type { StreamHandle } from '@/api/singbox/streams'
 import { subscribeStream } from '@/api/singbox/subscriptions'
-import { disconnectConnections } from '@/assembly/connections'
+import { disconnectByIdAPI } from '@/assembly/connections'
 import type { Group, GroupItem, Groups, OutboundList } from '@/gen/daemon/started_service_pb'
 import { getConnectionChains } from '@/helper'
 import { activeConnections } from '@/store/connections'
-import { automaticDisconnection, iconReflectList } from '@/store/settings'
+import { automaticDisconnection, iconReflectList, speedtestTimeout } from '@/store/settings'
 import { activeBackend } from '@/store/setup'
 import type { Proxy } from '@/types'
-import { mergeProxyMap, proxyGroupList, proxyProviederList } from './index'
+import { proxyGroupList, proxyMap, proxyProviederList } from './index'
 
-// 延迟条目的时间戳按 tag+delay 记忆:同一延迟不换时间戳,节点 JSON 保持稳定,
-// mergeProxyMap 才能复用对象引用(否则每次 rebuild 全部节点都"变了")。
-const historyTimestamps = new Map<string, { delay: number; time: string }>()
-const historyFor = (tag: string, delay: number, fallbackTime: string): Proxy['history'] => {
-  if (delay <= 0) return []
-  const prev = historyTimestamps.get(tag)
+const getHistoryFromItem = (item: GroupItem): Proxy['history'] =>
+  item.urlTestDelay > 0
+    ? [
+        {
+          time: new Date(Number(item.urlTestTime) * 1000).toISOString(),
+          delay: item.urlTestDelay,
+        },
+      ]
+    : []
 
-  if (prev && prev.delay === delay) {
-    return [{ time: prev.time, delay }]
+const nodeToProxy = (item: GroupItem): Proxy => {
+  return {
+    name: item.tag,
+    type: item.type,
+    now: '',
+    history: getHistoryFromItem(item),
+    extra: {},
+    icon: '',
   }
-  historyTimestamps.set(tag, { delay, time: fallbackTime })
-  return [{ time: fallbackTime, delay }]
 }
-
-const nodeToProxy = (item: GroupItem, time: string): Proxy => ({
-  name: item.tag,
-  type: item.type,
-  now: '',
-  history: historyFor(item.tag, item.urlTestDelay, time),
-  extra: {},
-  udp: true,
-  icon: '',
-})
 
 let groups = new Map<string, Group>()
 let outbounds = new Map<string, GroupItem>()
@@ -44,27 +41,66 @@ let handles: StreamHandle[] = []
 let sessionKey = ''
 let ready: Promise<void> | null = null
 
-// 由流数据原生组装共享状态(无 clash 的 provider / GLOBAL / 排序等概念)。
-let rebuildTimer: ReturnType<typeof setTimeout> | null = null
+type URLTestWaiter = {
+  resolve: () => void
+  reject: (reason: Error) => void
+  timer: ReturnType<typeof setTimeout>
+}
 
-const rebuild = () => {
-  if (rebuildTimer) {
-    clearTimeout(rebuildTimer)
-    rebuildTimer = null
+const urlTestWaiters = new Set<URLTestWaiter>()
+
+const resolveURLTestWaiters = () => {
+  for (const waiter of urlTestWaiters) {
+    clearTimeout(waiter.timer)
+    waiter.resolve()
   }
+  urlTestWaiters.clear()
+}
 
+const rejectURLTestWaiters = (reason: Error) => {
+  for (const waiter of urlTestWaiters) {
+    clearTimeout(waiter.timer)
+    waiter.reject(reason)
+  }
+  urlTestWaiters.clear()
+}
+
+const waitForURLTestResult = (timeout: number) => {
+  let waiter!: URLTestWaiter
+  const promise = new Promise<void>((resolve, reject) => {
+    const timer = setTimeout(
+      () => {
+        urlTestWaiters.delete(waiter)
+        reject(new Error('sing-box URL test result timeout'))
+      },
+      Math.max(5000, timeout) + 1000,
+    )
+
+    waiter = { resolve, reject, timer }
+    urlTestWaiters.add(waiter)
+  })
+
+  return {
+    promise,
+    cancel: () => {
+      clearTimeout(waiter.timer)
+      urlTestWaiters.delete(waiter)
+    },
+  }
+}
+
+// 由流数据原生组装共享状态(无 clash 的 provider / GLOBAL / 排序等概念)。
+const rebuild = () => {
   const proxies: Record<string, Proxy> = {}
-  // 时间戳整轮 rebuild 只取一次
-  const time = new Date().toISOString()
 
   // 1) 出站叶子节点(含延迟)
   for (const item of outbounds.values()) {
-    proxies[item.tag] = nodeToProxy(item, time)
+    proxies[item.tag] = nodeToProxy(item)
   }
   // 2) 用组内 items 补建缺失的叶子节点(outbounds 流可能晚到或不含某些成员)
   for (const group of groups.values()) {
     for (const item of group.items) {
-      if (!proxies[item.tag]) proxies[item.tag] = nodeToProxy(item, time)
+      if (!proxies[item.tag]) proxies[item.tag] = nodeToProxy(item)
     }
   }
   // 3) 分组条目(携带 all / now),始终覆盖同名节点
@@ -74,9 +110,9 @@ const rebuild = () => {
       type: group.type,
       now: group.selected,
       all: group.items.map((i) => i.tag),
+      selectable: group.selectable,
       history: [],
       extra: {},
-      udp: true,
       icon: '',
     }
   }
@@ -85,7 +121,7 @@ const rebuild = () => {
     for (const item of group.items) {
       const node = proxies[item.tag]
       if (node && !node.all?.length && item.urlTestDelay > 0) {
-        node.history = historyFor(item.tag, item.urlTestDelay, time)
+        node.history = getHistoryFromItem(item)
       }
     }
   }
@@ -95,24 +131,17 @@ const rebuild = () => {
     if (node) node.icon = iconReflect.icon
   }
 
-  // diff 合并:URLTest 期间内核连续推送不再等于连续全页重渲染
-  mergeProxyMap(proxies)
+  proxyMap.value = proxies
   proxyGroupList.value = Array.from(groups.values())
     .filter((g) => g.items.length)
     .map((g) => g.tag)
   proxyProviederList.value = []
 }
 
-// 流推送走 150ms 合并节流(groups/outbounds 两条流常背靠背到达);
-// fetchProxies / handlerProxySelect 保留立即 rebuild 路径。
-const scheduleRebuild = () => {
-  if (rebuildTimer) return
-  rebuildTimer = setTimeout(rebuild, 150)
-}
-
 const closeStreams = () => {
   handles.forEach((h) => h.close())
   handles = []
+  rejectURLTestWaiters(new Error('sing-box proxy stream closed'))
   sessionKey = ''
   ready = null
 }
@@ -121,11 +150,6 @@ const stop = () => {
   closeStreams()
   groups = new Map()
   outbounds = new Map()
-  historyTimestamps.clear()
-  if (rebuildTimer) {
-    clearTimeout(rebuildTimer)
-    rebuildTimer = null
-  }
 }
 
 const ensureSession = () => {
@@ -148,18 +172,19 @@ const ensureSession = () => {
     subscribeStream<Groups>('groups', (msg) => {
       groups = new Map()
       for (const g of msg.group) groups.set(g.tag, g)
+      rebuild()
       if (!resolved) {
         resolved = true
-        rebuild()
         resolveReady()
       } else {
-        scheduleRebuild()
+        // URLTest RPC 只负责启动任务；历史记录更新后，结果才会通过此订阅推送。
+        resolveURLTestWaiters()
       }
     }),
     subscribeStream<OutboundList>('outbounds', (msg) => {
       outbounds = new Map()
       for (const o of msg.outbounds) outbounds.set(o.tag, o)
-      scheduleRebuild()
+      rebuild()
     }),
   ]
 }
@@ -175,7 +200,8 @@ export const fetchProxies = async () => {
 
 export const handlerProxySelect = async (proxyGroupName: string, proxyName: string) => {
   const client = getSingboxClient()?.client
-  if (!client) return
+  const proxyGroup = proxyMap.value[proxyGroupName]
+  if (!client || proxyGroup?.selectable === false) return
 
   await client.selectOutbound({ groupTag: proxyGroupName, outboundTag: proxyName })
 
@@ -187,36 +213,41 @@ export const handlerProxySelect = async (proxyGroupName: string, proxyName: stri
   }
 
   if (automaticDisconnection.value) {
-    const matching = activeConnections.value.filter((c) =>
-      getConnectionChains(c).includes(proxyGroupName),
-    )
-
-    disconnectConnections(matching, activeConnections.value.length)
+    activeConnections.value
+      .filter((c) => getConnectionChains(c).includes(proxyGroupName))
+      .forEach((c) => disconnectByIdAPI(c.id))
   }
 }
 
-// sing-box native API 的 URLTest 是组级别;节点卡片触发测速时转为所在组测速。
+const runURLTest = async (outboundTag: string, timeout = speedtestTimeout.value) => {
+  ensureSession()
+  if (ready) await ready
+
+  const client = getSingboxClient()?.client
+  if (!client) return
+
+  // 先注册等待，避免测速很快时结果推送早于一元 RPC 响应而丢失。
+  const result = waitForURLTestResult(timeout)
+  try {
+    await Promise.all([client.uRLTest({ outboundTag }), result.promise])
+  } finally {
+    result.cancel()
+  }
+}
+
+// sing-box API 支持直接测试单个 outbound;节点卡片传节点自身的 tag。
 export const proxyLatencyTest = async (
   proxyName: string,
   _url?: string,
-  _timeout?: number,
-  groupName?: string,
+  timeout = speedtestTimeout.value,
 ) => {
-  const client = getSingboxClient()?.client
-  if (!client) return
-  await client.uRLTest({ outboundTag: groupName || proxyName })
+  await runURLTest(proxyName, timeout)
 }
 
 export const proxyGroupLatencyTest = async (proxyGroupName: string) => {
-  const client = getSingboxClient()?.client
-  if (!client) return
-  await client.uRLTest({ outboundTag: proxyGroupName })
+  await runURLTest(proxyGroupName)
 }
 
 export const allProxiesLatencyTest = async () => {
-  const client = getSingboxClient()?.client
-  if (!client) return
-  await Promise.allSettled(
-    Array.from(groups.keys()).map((tag) => client.uRLTest({ outboundTag: tag })),
-  )
+  await Promise.allSettled(Array.from(groups.keys()).map((tag) => runURLTest(tag)))
 }

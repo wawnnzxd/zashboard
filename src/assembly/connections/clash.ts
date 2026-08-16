@@ -118,7 +118,7 @@ export const connectionAccessor: ConnectionAccessor = {
   process: (connection) => {
     const { metadata } = asClash(connection)
 
-    return metadata.process || metadata.processPath.replace(/^.*[/\\](.*)$/, '$1') || '-'
+    return metadata.process || metadata.processPath?.replace(/^.*[/\\](.*)$/, '$1') || '-'
   },
   destination: (connection) => {
     const clash = asClash(connection)

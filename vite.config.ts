@@ -4,7 +4,7 @@ import { execSync } from 'child_process'
 import { fileURLToPath, URL } from 'node:url'
 import { defineConfig } from 'vite'
 import { VitePWA } from 'vite-plugin-pwa'
-import { version } from './package.json'
+import { version } from './package.json' with { type: 'json' }
 
 const getGitCommitId = (): string => {
   try {
@@ -44,6 +44,11 @@ export default defineConfig({
       registerType: 'prompt',
       includeAssets: ['favicon.svg', 'favicon-dark.svg'],
       workbox: {
+        // The globe is lazy-loaded, but its local textures and bundled attribution must
+        // remain available after the first PWA install/update for offline cache reuse.
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2,webp,jpg,md}'],
+        // The bundle is above Workbox's 2 MiB default because sing-box native
+        // API support and the Tools page are always bundled.
         maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
         // Tools 页与 xterm 多数用户从不打开,不进 precache(首装省 ~400KB),
         // 首次访问时走运行时缓存
@@ -103,6 +108,7 @@ export default defineConfig({
           if (!id.includes('node_modules')) return undefined
           if (id.includes('echarts') || id.includes('zrender')) return 'echarts'
           if (id.includes('@xterm')) return 'xterm'
+          if (id.includes('/three/') || id.includes('/three@')) return 'three'
           if (id.includes('vue-i18n') || id.includes('@intlify')) return 'i18n'
           if (id.includes('@bufbuild') || id.includes('@connectrpc')) return 'grpc'
           if (

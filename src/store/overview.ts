@@ -35,8 +35,13 @@ export const uploadSpeedHistory = ref(makeInitValue())
 
 let cancel: (() => void) | undefined
 
-const startStatisticStreams = () => {
+export const initSatistic = () => {
   cancel?.()
+
+  downloadSpeedHistory.value = makeInitValue()
+  uploadSpeedHistory.value = makeInitValue()
+  memoryHistory.value = makeInitValue()
+  connectionsHistory.value = makeInitValue()
 
   const { data: memoryWsData, close: memoryWsClose } = fetchMemoryAPI<{
     inuse: number
@@ -110,19 +115,6 @@ const startStatisticStreams = () => {
     unwatchMemory()
     unwatchTraffic()
   }
-}
-
-export const initSatistic = () => {
-  downloadSpeedHistory.value = makeInitValue()
-  uploadSpeedHistory.value = makeInitValue()
-  memoryHistory.value = makeInitValue()
-  connectionsHistory.value = makeInitValue()
-  startStatisticStreams()
-}
-
-// 从后台恢复:只重建流,不清图表历史(短暂切页回来图表不清零)
-export const resumeSatistic = () => {
-  startStatisticStreams()
 }
 
 export const stopSatistic = () => {

@@ -9,8 +9,7 @@ import type { MessageInitShape } from '@bufbuild/protobuf'
 export type WebUsbUnavailableReason = 'unsupported' | 'insecure'
 
 export type WebUsbStatus =
-  | { available: true }
-  | { available: false; reason: WebUsbUnavailableReason }
+  { available: true } | { available: false; reason: WebUsbUnavailableReason }
 
 export function webusbStatus(): WebUsbStatus {
   if (typeof navigator === 'undefined' || !('usb' in navigator)) {

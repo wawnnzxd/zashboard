@@ -2,9 +2,7 @@
   <CtrlsBar>
     <div
       class="scrollbar-hidden p-2"
-      @touchstart.passive.stop
-      @touchmove.passive.stop
-      @touchend.passive.stop
+      data-page-swipe-ignore
     >
       <div class="flex w-full gap-2">
         <SegmentedControl

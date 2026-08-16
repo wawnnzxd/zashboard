@@ -1,0 +1,28 @@
+/*
+ * 框架挂载点：Tailwind 的 JS 配置与 daisyUI 插件。
+ * 只放"接入框架"的声明，具体的主题值在 presets.css / tokens.css。
+ */
+
+@config '../../../../tailwind.config.ts';
+
+@plugin 'daisyui' {
+  /* 只编译 UI 实际暴露的内置主题(ALL_THEME):themes: all 会把 20 个
+     完全不可达的主题也打进 CSS(自定义主题块见 presets.css) */
+  themes:
+    light --default,
+    dark --prefersdark,
+    halloween,
+    forest,
+    lofi,
+    wireframe,
+    black,
+    dracula,
+    business,
+    night,
+    dim,
+    nord,
+    sunset,
+    abyss,
+    cupcake;
+  exclude: rootscrollgutter;
+}

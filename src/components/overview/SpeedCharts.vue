@@ -1,25 +1,27 @@
 <template>
-  <BasicCharts
-    ref="chartRef"
+  <TimeSeriesChart
     :data="chartsData"
     :label-formatter="labelFormatter"
-    :tool-tip-formatter="tooltipFormatter"
-    :min="60 * 1000"
+    :tooltip-formatter="tooltipFormatter"
+    :y-axis-floor="60 * 1000"
+    :window-seconds="timeSaved"
   />
 </template>
 
 <script setup lang="ts">
-import { getToolTipForParams } from '@/helper'
-import { prettyBytesHelper } from '@/helper/utils'
-import { downloadSpeedHistory, uploadSpeedHistory } from '@/store/overview'
-import { computed, ref } from 'vue'
-import { useI18n } from 'vue-i18n'
 import { defineAsyncComponent } from 'vue'
 
 // echarts 经「侧栏常驻图表」同步链进 entry(573KB raw):组件层异步化才能把它切出去
-const BasicCharts = defineAsyncComponent(() => import('./BasicCharts.vue'))
+const TimeSeriesChart = defineAsyncComponent(
+  () => import('@/components/charts/TimeSeriesChart.vue'),
+)
+import { formatHistoryTooltipParam } from '@/components/charts/chartTooltip'
+import type { ChartTooltipParam } from '@/components/charts/chartTypes'
+import { prettyBytesHelper } from '@/helper/utils'
+import { downloadSpeedHistory, timeSaved, uploadSpeedHistory } from '@/store/overview'
+import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 
-const chartRef = ref()
 const { t } = useI18n()
 const chartsData = computed(() => {
   return [
@@ -40,14 +42,9 @@ const labelFormatter = (value: number) => {
     binary: false,
   })}/s`
 }
-const tooltipFormatter = (value: ToolTipParams[]) => {
+const tooltipFormatter = (value: ChartTooltipParam[]) => {
   return value
-    .map((item) => {
-      return getToolTipForParams(item, {
-        binary: false,
-        suffix: '/s',
-      })
-    })
+    .map((item) => formatHistoryTooltipParam(item, { binary: false, suffix: '/s' }))
     .join('')
 }
 </script>

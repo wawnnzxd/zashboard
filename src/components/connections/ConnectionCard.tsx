@@ -11,7 +11,7 @@ import {
   PROXY_CHAIN_DIRECTION,
 } from '@/constant'
 import { getConnectionChains, getConnectionSmartBlock } from '@/helper'
-import { connectionFilter, connectionTabShow } from '@/store/connections'
+import { connectionFilter, connectionTabShow, isClosedConnection } from '@/store/connections'
 import { connectionCardLines, proxyChainDirection, showFullProxyChain } from '@/store/settings'
 import type { Connection } from '@/types'
 import {
@@ -224,14 +224,12 @@ export default defineComponent<{
 
     useBounceOnVisible()
 
-    // Close 键的过滤按依赖缓存,不再每行每拍重跑
-    const visibleLines = computed(() =>
+    // Close 键的过滤按依赖缓存,不再每行每拍重跑;
+    // 「已关闭」tab 全部行、「全部」tab 中已关闭的行,都不给关闭按钮(关不掉)
+    const linesWithClose = connectionCardLines
+    const linesWithoutClose = computed(() =>
       connectionCardLines.value.map((line) =>
-        line.filter(
-          (key) =>
-            key !== CONNECTIONS_TABLE_ACCESSOR_KEY.Close ||
-            connectionTabShow.value !== CONNECTION_TAB_TYPE.CLOSED,
-        ),
+        line.filter((key) => key !== CONNECTIONS_TABLE_ACCESSOR_KEY.Close),
       ),
     )
 
@@ -254,16 +252,20 @@ export default defineComponent<{
           />
         ),
       }
+      const isClosed =
+        connectionTabShow.value === CONNECTION_TAB_TYPE.CLOSED || isClosedConnection(conn)
+      // 淡化只能落在行上:根节点的 opacity 归 bounce-in 入场动画所有(见 composables/bouncein),
+      // 两者写在同一元素上会互相覆盖。
+      const dimmed = isClosed && connectionTabShow.value === CONNECTION_TAB_TYPE.ALL
+      const lines = isClosed ? linesWithoutClose.value : linesWithClose.value
 
       return (
         <div
-          class={[
-            'scroller-item text-base-content/65 flex cursor-pointer flex-col gap-1 px-3 py-2',
-          ]}
+          class="text-base-content/65 flex cursor-pointer flex-col gap-1 px-3 py-2"
           onClick={() => handlerInfo(conn)}
         >
-          {visibleLines.value.map((line) => (
-            <div class="flex h-5 items-center gap-1 text-sm">
+          {lines.map((line) => (
+            <div class={['flex h-5 items-center gap-1 text-sm', dimmed ? 'opacity-60' : '']}>
               {line.map((key) => cardRenderers[key](ctx))}
             </div>
           ))}

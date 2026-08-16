@@ -61,9 +61,14 @@ export const uploadTotal = ref(0)
 
 let cancel: (() => void) | undefined
 
-// active(已带瞬时速率)与 closed(本拍新关闭增量)均由各后端 assembly 算好,store 只消费。
-const startConnectionsStream = () => {
+export const initConnections = () => {
   cancel?.()
+  activeConnections.value = []
+  closedConnections.value = []
+  downloadTotal.value = 0
+  uploadTotal.value = 0
+  initAggregatedDataMap()
+  // active(已带瞬时速率)与 closed(本拍新关闭增量)均由各后端 assembly 算好,store 只消费。
   const ws = fetchConnectionsAPI()
   const unwatch = watch(ws.data, (snapshot) => {
     if (!snapshot) return
@@ -85,20 +90,6 @@ const startConnectionsStream = () => {
     }
   })
 
-  cancel = () => {
-    unwatch()
-    ws.close()
-  }
-}
-
-export const initConnections = () => {
-  activeConnections.value = []
-  closedConnections.value = []
-  downloadTotal.value = 0
-  uploadTotal.value = 0
-  initAggregatedDataMap()
-  startConnectionsStream()
-
   if (autoDisconnectIdleUDP.value) {
     watchOnce(activeConnections, () => {
       activeConnections.value
@@ -113,12 +104,11 @@ export const initConnections = () => {
         })
     })
   }
-}
 
-// 从后台恢复:只重建流,不清 store(闭合列表/累计量保留,重连首拍自然拿到全量快照;
-// 新建的 previousMap 为空,首拍速率为 0,不会出现跨隐藏期的速率尖刺)
-export const resumeConnections = () => {
-  startConnectionsStream()
+  cancel = () => {
+    unwatch()
+    ws.close()
+  }
 }
 
 export const stopConnections = () => {
@@ -156,9 +146,15 @@ const sortKeyFunctionMap: Record<SORT_TYPE, (connection: Connection) => string |
 }
 
 export const connections = computed(() => {
-  return connectionTabShow.value === CONNECTION_TAB_TYPE.ACTIVE
-    ? activeConnections.value
-    : closedConnections.value
+  switch (connectionTabShow.value) {
+    case CONNECTION_TAB_TYPE.ACTIVE:
+      return activeConnections.value
+    case CONNECTION_TAB_TYPE.CLOSED:
+      return closedConnections.value
+    // 全部:两个数组天然不相交(closed 是「上一拍存在、这一拍消失」的连接),无需去重。
+    default:
+      return closedConnections.value.concat(activeConnections.value)
+  }
 })
 
 // 各代理组/节点的实时速率聚合:每拍一次 O(连接数×链长) 构建,消费方 O(1) 查表 ——
@@ -182,7 +178,13 @@ export const chainTrafficMap = computed(() => {
   return map
 })
 
-export const renderConnections = computed(() => {
+const closedConnectionIds = computed(() => new Set(closedConnections.value.map((conn) => conn.id)))
+
+// 「已关闭」与「全部」两个 tab 下都用它判定单条连接是否已断,以决定关闭按钮与淡化样式。
+export const isClosedConnection = (connection: Connection) =>
+  closedConnectionIds.value.has(connection.id)
+
+const filterConnections = (items: readonly Connection[]) => {
   const searchRegex = toSearchRegex(connectionFilter.value)
   const hideRegex = quickFilterEnabled.value ? toSearchRegex(quickFilterRegex.value) : null
   const sourceIPs = sourceIPFilter.value
@@ -197,7 +199,7 @@ export const renderConnections = computed(() => {
     ? connectionCardLines.value.flat()
     : connectionTableColumns.value
 
-  const filtered = connections.value.filter((conn) => {
+  return items.filter((conn) => {
     if (sourceIPs !== null && sourceIPs.every((i) => i !== getConnectionSourceIP(conn))) {
       return false
     }
@@ -218,6 +220,15 @@ export const renderConnections = computed(() => {
 
     return true
   })
+}
+
+// Overview visualizations only represent live traffic, but should still honor the same filters as
+// the connections view. Keep this separate from `renderConnections`, whose source depends on the
+// selected active/closed/all tab.
+export const filteredActiveConnections = computed(() => filterConnections(activeConnections.value))
+
+export const renderConnections = computed(() => {
+  const filtered = filterConnections(connections.value)
 
   const sortType = isConnectionCard.value ? connectionSortType.value : SORT_TYPE.HOST
   const getSortKey = sortKeyFunctionMap[sortType]

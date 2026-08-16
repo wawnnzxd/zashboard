@@ -152,9 +152,8 @@ export default defineComponent({
           v-model={connectionFilter.value}
           placeholder={`${t('search')} | Regex`}
           clearable={true}
-          before-close={true}
           debounce={200}
-          class={isLargeCtrlsBar.value ? 'w-32 max-w-80 flex-1' : 'w-full'}
+          class={isLargeCtrlsBar.value ? 'w-32 max-w-80 flex-1' : 'join-item min-w-0 flex-1'}
         />
       )
 
@@ -214,7 +213,7 @@ export default defineComponent({
             </div>
           )}
           <div class="join w-full">
-            <SourceIPFilter class="w-40" />
+            <SourceIPFilter class="join-item w-40" />
             {searchInput}
           </div>
         </div>
