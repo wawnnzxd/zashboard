@@ -1,6 +1,6 @@
 import { isMiddleScreen } from '@/helper/utils'
 import { emoji, font, theme } from '@/store/settings'
-import { useElementSize } from '@vueuse/core'
+import { useDocumentVisibility, useElementSize, useElementVisibility } from '@vueuse/core'
 import { BarChart, LineChart, SankeyChart } from 'echarts/charts'
 import { GridComponent, LegendComponent, TooltipComponent } from 'echarts/components'
 import * as echarts from 'echarts/core'
@@ -107,20 +107,36 @@ interface UseEChartOptions {
   paused?: Readonly<Ref<boolean>>
   isEmpty?: Readonly<Ref<boolean>>
   onInit?: (chart: EChart) => void | (() => void)
+  // 秒级更新走这条数据通道(仅 series data / 轴时间窗),与 options 静态骨架分离:
+  // 骨架只在主题/字体/系列结构变化时才全量下发,免去每拍重建整棵 option 树再全量 merge
+  dataOptions?: ComputedRef<EChartOption>
 }
 
 export const useEChart = (
   chartRef: ChartElementRef,
   options: ComputedRef<EChartOption>,
-  { paused, isEmpty, onInit }: UseEChartOptions = {},
+  { paused, isEmpty, onInit, dataOptions }: UseEChartOptions = {},
 ) => {
   const chart = shallowRef<EChart>()
   const { width, height } = useElementSize(chartRef)
   let removeInitListeners: (() => void) | undefined
   let touchTarget: HTMLElement | null = null
 
+  // 图表滚出视口或整页退到后台时暂停下发,回到可见补一拍最新值 ——
+  // 数据流与 store 照常更新,只是不对看不见的画布做 setOption + 重绘
+  const chartVisible = useElementVisibility(chartRef)
+  const documentVisibility = useDocumentVisibility()
+  const hidden = () => !chartVisible.value || documentVisibility.value !== 'visible'
+  let pendingRender = false
+  let pendingData = false
+
   const render = () => {
     if (!chart.value || paused?.value) return
+    if (hidden()) {
+      pendingRender = true
+      return
+    }
+    pendingRender = false
 
     if (isEmpty?.value) {
       chart.value.clear()
@@ -128,6 +144,22 @@ export const useEChart = (
     }
 
     chart.value.setOption(options.value)
+    if (dataOptions) {
+      // 骨架全量下发(setOption 默认 merge)后补上当前数据,避免清空/重建后短暂无数据
+      chart.value.setOption(dataOptions.value)
+      pendingData = false
+    }
+  }
+
+  const renderData = () => {
+    if (!chart.value || !dataOptions || paused?.value) return
+    if (isEmpty?.value) return
+    if (hidden()) {
+      pendingData = true
+      return
+    }
+    pendingData = false
+    chart.value.setOption(dataOptions.value, { lazyUpdate: true })
   }
 
   const resize = debounce(() => chart.value?.resize(), 100)
@@ -150,6 +182,14 @@ export const useEChart = (
   }
 
   watch(options, render)
+  if (dataOptions) {
+    watch(dataOptions, renderData)
+  }
+  watch([chartVisible, documentVisibility], () => {
+    if (hidden()) return
+    if (pendingRender) render()
+    else if (pendingData) renderData()
+  })
   watch([width, height], resize)
   watch(isMiddleScreen, syncTouchListener)
   if (paused) {

@@ -36,9 +36,8 @@ const props = withDefaults(
 const chartRef = ref<HTMLElement>()
 const { colors, fontFamily } = useChartTheme(chartRef)
 
+// 静态骨架:仅初始化与主题/字体变化时下发;每拍数据走下方 dataOptions
 const options = computed<EChartOption>(() => {
-  const latestPoint = props.data.at(-1)
-  const latest = latestPoint ? getChartPointValue(latestPoint)[0] : Date.now()
   const lineColor = props.color === 'info' ? colors.info60 : colors.primary60
   const areaColor = props.color === 'info' ? colors.info30 : colors.primary30
 
@@ -65,8 +64,6 @@ const options = computed<EChartOption>(() => {
     xAxis: {
       type: 'time',
       show: false,
-      min: latest - (props.windowSeconds - 1) * 1000,
-      max: latest - 1000,
     },
     yAxis: {
       type: 'value',
@@ -97,7 +94,6 @@ const options = computed<EChartOption>(() => {
         symbol: 'none',
         smooth: true,
         lineStyle: { width: 1.5 },
-        data: props.data,
         color: lineColor,
         emphasis: { disabled: true },
         areaStyle: {
@@ -111,5 +107,20 @@ const options = computed<EChartOption>(() => {
   }
 })
 
-useEChart(chartRef, options)
+// 每拍只推数据与时间窗;时间窗锚定最新数据点,保证最新点钉在右缘,
+// 缓冲点落在左缘外被 clip 裁掉
+const dataOptions = computed<EChartOption>(() => {
+  const latestPoint = props.data.at(-1)
+  const latest = latestPoint ? getChartPointValue(latestPoint)[0] : Date.now()
+
+  return {
+    xAxis: {
+      min: latest - (props.windowSeconds - 1) * 1000,
+      max: latest - 1000,
+    },
+    series: [{ data: props.data }],
+  }
+})
+
+useEChart(chartRef, options, { dataOptions })
 </script>

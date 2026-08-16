@@ -127,7 +127,7 @@ import { useWindowSize } from '@vueuse/core'
 import type { CSSProperties } from 'vue'
 import { computed, nextTick, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { buildTopologyData } from './topology'
+import { buildTopologyData, type TopologyData } from './topology'
 
 const { t } = useI18n()
 const chartRef = ref<HTMLElement>()
@@ -166,8 +166,21 @@ const chartSurfaceStyle = computed<CSSProperties>(() => {
   }
 })
 
-const topologyData = computed(() =>
-  buildTopologyData(
+// 连接快照每秒换新引用,但拓扑(节点/链路/连接数)多数拍并不变:
+// 结构相同则沿用上一份引用,下游 options 不重算、sankey 不做全量销毁重建
+const isSameTopology = (a: TopologyData, b: TopologyData) =>
+  a.nodes.length === b.nodes.length &&
+  a.links.length === b.links.length &&
+  a.nodes.every((node, i) => node.name === b.nodes[i].name && node.layer === b.nodes[i].layer) &&
+  a.links.every(
+    (link, i) =>
+      link.source === b.links[i].source &&
+      link.target === b.links[i].target &&
+      link.value === b.links[i].value,
+  )
+
+const topologyData = computed<TopologyData>((prev) => {
+  const next = buildTopologyData(
     (topologyApplyConnectionFilter.value
       ? filteredActiveConnections.value
       : activeConnections.value
@@ -183,8 +196,10 @@ const topologyData = computed(() =>
       proxyChainExit: t('proxyChainExit'),
       unknown: t('unknown'),
     },
-  ),
-)
+  )
+
+  return prev && isSameTopology(prev, next) ? prev : next
+})
 const isEmpty = computed(() => topologyData.value.nodes.length === 0)
 
 const options = computed<EChartOption>(() => ({
