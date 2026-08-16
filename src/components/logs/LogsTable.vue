@@ -1,6 +1,7 @@
 <template>
   <VirtualTable
     :data="logs"
+    :get-row-id="logRowId"
     :columns="columns"
     sorting-key="config/logs-table-sorting"
     :estimate-size="36"
@@ -101,4 +102,6 @@ const handlerRowClick = (log: LogWithSeq) => {
     emits('connectionClick', connectionID)
   }
 }
+
+const logRowId = (log: LogWithSeq) => String(log.seq)
 </script>

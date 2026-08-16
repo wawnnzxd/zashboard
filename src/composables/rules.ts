@@ -5,6 +5,7 @@ import { getConnectionRulePayload } from '@/helper'
 import { activeConnections } from '@/store/connections'
 import { disconnectOnRuleDisable } from '@/store/settings'
 import type { Rule } from '@/types'
+import { computed } from 'vue'
 
 export const isRuleDisabled = (rule: Rule) => {
   if (rule.extra) {
@@ -14,10 +15,15 @@ export const isRuleDisabled = (rule: Rule) => {
   return rule.disabled
 }
 
+// provider 按名字查表:表格/卡片每行都要查,find 是 O(P) 线性扫
+const ruleProviderByName = computed(
+  () => new Map(ruleProviderList.value.map((provider) => [provider.name, provider])),
+)
+
 // RuleSet 的条目数要去 provider 里取,普通规则用自带的 size。
 export const getRuleSize = (rule: Rule) => {
   if (rule.type === 'RuleSet') {
-    return ruleProviderList.value.find((provider) => provider.name === rule.payload)?.ruleCount
+    return ruleProviderByName.value.get(rule.payload)?.ruleCount
   }
 
   return rule.size
@@ -28,7 +34,7 @@ export const isUpdateableRuleSet = (rule: Rule) => {
     return false
   }
 
-  const provider = ruleProviderList.value.find((provider) => provider.name === rule.payload)
+  const provider = ruleProviderByName.value.get(rule.payload)
 
   if (!provider) {
     return false

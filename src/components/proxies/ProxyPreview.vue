@@ -58,6 +58,7 @@ import { getColorForLatency } from '@/helper'
 import { useTooltip } from '@/helper/tooltip'
 import { getLatencyByName } from '@/assembly/proxies'
 import { lowLatency, mediumLatency, proxyPreviewType } from '@/store/settings'
+import { isMiddleScreen } from '@/helper/utils'
 import { useElementSize } from '@vueuse/core'
 import { computed, ref } from 'vue'
 
@@ -71,7 +72,10 @@ const { showTip } = useTooltip()
 const previewRef = ref<HTMLElement | null>(null)
 const { width } = useElementSize(previewRef)
 
+// 首帧 useElementSize 为 0(挂载后被复位),先按屏幕猜一次,避免每张组卡都先按
+// 窄版渲染再在 ResizeObserver 回调里翻转(多一轮布局 + RO loop 告警)
 const widthEnough = computed(() => {
+  if (!width.value) return !isMiddleScreen.value && props.nodes.length <= 24
   return width.value > 20 * props.nodes.length
 })
 

@@ -1,5 +1,5 @@
 import { PROXY_CARD_SIZE } from '@/constant'
-import { findScrollableParent } from '@/helper/utils'
+import { findScrollableParent, isMiddleScreen } from '@/helper/utils'
 import { minProxyCardWidth, proxyCardSize } from '@/store/settings'
 import { useCurrentElement, useElementSize, useInfiniteScroll } from '@vueuse/core'
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
@@ -7,9 +7,14 @@ import { computed, nextTick, onMounted, ref, watch } from 'vue'
 export const useCalculateMaxProxies = (totalProxies: number, activeIndex: number) => {
   const el = useCurrentElement()
   const { width } = useElementSize(el)
+  // 首帧 useElementSize 为 0:按视口宽度先估一版容量,避免先渲染最少 24 张、
+  // ResizeObserver 到达后再扩容重渲染(多一轮布局 + RO loop 告警)
   const initMaxProxies = computed(() => {
+    const measured =
+      width.value || (isMiddleScreen.value ? window.innerWidth : window.innerWidth / 2)
+
     return (
-      Math.max(Math.floor(width.value / minProxyCardWidth.value), 2) *
+      Math.max(Math.floor(measured / minProxyCardWidth.value), 2) *
       (proxyCardSize.value === PROXY_CARD_SIZE.LARGE ? 9 : 12)
     )
   })

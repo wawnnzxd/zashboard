@@ -123,12 +123,20 @@ const props = withDefaults(
     overscan?: number
     columnVisibility?: VisibilityState
     rowClass?: (row: T) => string | undefined
+    // 行身份键:日志这类头部插入的数据没有它时,行 key / cell.id 都是 index,
+    // 每次 flush 全部可见行 props 都变、整列重渲染
+    getRowId?: (row: T) => string
   }>(),
   {
     estimateSize: 36,
-    overscan: 24,
+    // 每侧 8 行(默认 24 会让每次 patch 面积多出 2-3 倍)
+    overscan: 8,
   },
 )
+
+// 稳定的空可见性对象:`?? {}` 每次访问都是新引用,会打穿 tanstack 对
+// row.getVisibleCells 一族的 memo(按引用比较),每行每次渲染三层 memo 全 miss
+const EMPTY_VISIBILITY: VisibilityState = {}
 
 const emits = defineEmits<{
   (e: 'rowClick', row: T): void
@@ -150,9 +158,10 @@ const tanstackTable = useVueTable({
       return sorting.value
     },
     get columnVisibility() {
-      return props.columnVisibility ?? {}
+      return props.columnVisibility ?? EMPTY_VISIBILITY
     },
   },
+  getRowId: props.getRowId,
   onSortingChange: (updater) => {
     sorting.value = isFunction(updater) ? updater(sorting.value) : updater
   },
@@ -169,6 +178,8 @@ const rowVirtualizerOptions = computed(() => {
     getScrollElement: () => parentRef.value,
     estimateSize: () => props.estimateSize,
     overscan: props.overscan,
+    // 虚拟行以行 id 为身份键,头部插入时未变的行不再被当成新行重渲染
+    getItemKey: (index: number) => rows.value[index]?.id ?? index,
   }
 })
 

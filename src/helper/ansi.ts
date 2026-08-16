@@ -89,22 +89,44 @@ const ensureContrast = (color: Rgb, background: Rgb, target: Rgb): Rgb => {
 
 const rgbString = ([red, green, blue]: Rgb) => `rgb(${red}, ${green}, ${blue})`
 
-const foregroundColor = (color: Rgb, colorScheme: ThemeColorScheme) =>
-  rgbString(
-    ensureContrast(
-      color,
-      colorScheme === 'dark' ? BLACK : WHITE,
-      colorScheme === 'dark' ? WHITE : BLACK,
-    ),
-  )
+// 对比度修正是 12 轮二分 × 亮度计算,而输入空间只有 16 基础色 + 256 色 × 2 套主题:
+// 每行日志的每个色码都重跑纯属浪费,按 (主题, 颜色) 记忆结果
+const foregroundCache = new Map<string, string>()
+const backgroundCache = new Map<string, string>()
+const colorCacheKey = (color: Rgb, colorScheme: ThemeColorScheme) =>
+  `${colorScheme}:${color[0]},${color[1]},${color[2]}`
+
+const foregroundColor = (color: Rgb, colorScheme: ThemeColorScheme) => {
+  const key = colorCacheKey(color, colorScheme)
+  let value = foregroundCache.get(key)
+
+  if (!value) {
+    value = rgbString(
+      ensureContrast(
+        color,
+        colorScheme === 'dark' ? BLACK : WHITE,
+        colorScheme === 'dark' ? WHITE : BLACK,
+      ),
+    )
+    foregroundCache.set(key, value)
+  }
+  return value
+}
 
 const backgroundColor = (color: Rgb, colorScheme: ThemeColorScheme) => {
-  // ANSI backgrounds need to contrast with the theme's default foreground,
-  // which is dark in light mode and light in dark mode.
-  const foreground = colorScheme === 'dark' ? WHITE : BLACK
-  const target = colorScheme === 'dark' ? BLACK : WHITE
+  const key = colorCacheKey(color, colorScheme)
+  let value = backgroundCache.get(key)
 
-  return rgbString(ensureContrast(color, foreground, target))
+  if (!value) {
+    // ANSI backgrounds need to contrast with the theme's default foreground,
+    // which is dark in light mode and light in dark mode.
+    const foreground = colorScheme === 'dark' ? WHITE : BLACK
+    const target = colorScheme === 'dark' ? BLACK : WHITE
+
+    value = rgbString(ensureContrast(color, foreground, target))
+    backgroundCache.set(key, value)
+  }
+  return value
 }
 
 const colorFrom256 = (value: number): Rgb | undefined => {

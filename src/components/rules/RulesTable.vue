@@ -273,11 +273,16 @@ const ruleColumns: ColumnDef<Rule>[] = [
   },
 ]
 
+// 序号按列表算一次,免得每行 indexOf 全表线性扫
+const providerIndexMap = computed(
+  () => new Map(renderRulesProvider.value.map((provider, index) => [provider, index + 1])),
+)
+
 const providerColumns: ColumnDef<RuleProvider>[] = [
   {
     header: '#',
     id: 'index',
-    accessorFn: (provider) => renderRulesProvider.value.indexOf(provider) + 1,
+    accessorFn: (provider) => providerIndexMap.value.get(provider) ?? 0,
     cell: ({ getValue }) =>
       h('span', { class: 'text-base-content/50 tabular-nums' }, String(getValue() ?? '')),
     meta: { cellClass: 'w-12' },
