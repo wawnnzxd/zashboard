@@ -71,7 +71,9 @@ import { onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 const { t } = useI18n()
-const showPrivacy = ref(false)
+// 默认显示真实 IP:这是本地运行、给自己用的控制台,没有对自己隐藏的理由。
+// 眼睛开关保留给截图/录屏分享的场景,手动关一下即可(不持久化,刷新即回显示态)。
+const showPrivacy = ref(true)
 const { showTip } = useTooltip()
 const handlerShowPrivacyTip = (e: Event) => {
   showTip(e, t('ipScreenshotTip'))
