@@ -25,7 +25,7 @@ export type PublicIPInfo = {
 }
 
 // 打码只有这一种写法。任何「保留前几段」的变体都会在隐私视图里泄露信息。
-const MASKED_IP = '***.***.***.***'
+export const MASKED_IP = '***.***.***.***'
 
 export const ipForChina = ref<PublicIPInfo>({ ip: [], ipWithPrivacy: [] })
 export const ipForGlobal = ref<PublicIPInfo>({ ip: [], ipWithPrivacy: [] })

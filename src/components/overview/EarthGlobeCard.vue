@@ -309,6 +309,7 @@ import { awaitPublicIP, fetchPublicIP } from '@/composables/publicIP'
 import { themeColorScheme } from '@/helper/theme'
 import { prettyBytesHelper } from '@/helper/utils'
 import { activeConnections } from '@/store/connections'
+import { MASKED_IP } from '@/composables/publicIP'
 import { earthOriginSource, earthVisualMode, language, theme } from '@/store/settings'
 import {
   ArrowPathIcon,
@@ -385,19 +386,10 @@ let initIdleHandle: number | null = null
 
 const isValidIP = (value: string) => Boolean(value && ipaddr.isValid(value))
 
-const maskIP = (value: string) => {
-  if (!isValidIP(value)) return '—'
-
-  const address = ipaddr.parse(value)
-
-  if (address.kind() === 'ipv4') {
-    const octets = address.toByteArray()
-    return `${octets[0]}.${octets[1]}.*.*`
-  }
-
-  const parts = address.toNormalizedString().split(':')
-  return `${parts[0]}:${parts[1]}:****:****`
-}
+// 与「网络信息」卡同一条打码规则(publicIP.ts):完全打码。
+// 原实现保留前两段(119.98.*.*),同一个秘密在两张卡上两套口径,
+// 松的那套就是泄露 —— 前两段足以定位到城市级。
+const maskIP = (value: string) => (isValidIP(value) ? MASKED_IP : '—')
 
 const displayedOriginIP = computed(() => {
   if (originStatus.value === 'loading') return t('getting')

@@ -2,6 +2,7 @@
 
 import { Buffer } from 'buffer'
 import type { CityResponse, Reader as MMDBReader } from 'mmdb-lib'
+import { CITY_ZH } from './cityNames.zh'
 import {
   DBIP_CITY_URL,
   DBIP_STORED_BYTES,
@@ -343,6 +344,60 @@ const localizedName = (names: unknown, locale: string) => {
 const cityDisplayName = (name: string) =>
   name.replace(/\s*(?:(?:\([^()]*\)|（[^（）]*）)\s*)+$/u, '').trim()
 
+// ─── 名字本地化 ───
+// DB-IP City Lite 的 names 实际只有 en 一种语言,localizedName 的多语言分支
+// 在这份库上永远落回英文。所以:
+//   国家 —— 走 Intl.DisplayNames:区域名全集内建于 JS 引擎,四种界面语言
+//           (含 zh-TW 繁体、ru 俄文)全覆盖,零词典成本;mmdb 名只作兜底。
+//   城市 —— 引擎没有城市名数据,走静态词典(cityNames.zh.ts,只进本 worker chunk);
+//           词典只有中文,其余语言维持库里的名字。查不到原样显示英文,
+//           一个错的中文名比英文名更糟。
+
+let regionNames: Intl.DisplayNames | null = null
+let regionNamesLocale = ''
+
+const countryName = (isoCode: string | undefined, names: unknown, locale: string) => {
+  if (isoCode) {
+    try {
+      if (!regionNames || regionNamesLocale !== locale) {
+        regionNames = new Intl.DisplayNames([locale], { type: 'region' })
+        regionNamesLocale = locale
+      }
+
+      const display = regionNames.of(isoCode.toUpperCase())
+
+      // of() 对未知代码返回入参本身,那不是名字,落回 mmdb
+      if (display && display !== isoCode.toUpperCase()) return display
+    } catch {
+      // 引擎不认这个 locale / 不支持 DisplayNames:落回 mmdb 的名字
+    }
+  }
+
+  return localizedName(names, locale)
+}
+
+const cityName = (names: unknown, locale: string) => {
+  const name = cityDisplayName(localizedName(names, locale))
+
+  // 中文界面(简繁都算)查词典:键是英文,命中即中文;
+  // 若某天库真带上了 zh 名,name 已是中文、词典必然未命中,自动让位
+  if (name && locale.toLowerCase().startsWith('zh')) {
+    const direct = CITY_ZH[name]
+
+    if (direct) return direct
+
+    // DB-IP 给东京都区部的名字是「Shibuya City」这种行政后缀形态,剥掉回查;
+    // 真名含 City 的城市(Kansas City / Quezon City…)已在上面直查命中,到不了这里
+    if (name.endsWith(' City')) {
+      return CITY_ZH[name.slice(0, -' City'.length)] ?? name
+    }
+
+    return name
+  }
+
+  return name
+}
+
 const lookup = (id: number, ips: string[], locale: string) => {
   const locations: Record<string, EarthLocation | null> = {}
 
@@ -359,8 +414,8 @@ const lookup = (id: number, ips: string[], locale: string) => {
               ip,
               latitude,
               longitude,
-              city: cityDisplayName(localizedName(match?.city?.names, locale)),
-              country: localizedName(match?.country?.names, locale),
+              city: cityName(match?.city?.names, locale),
+              country: countryName(match?.country?.iso_code, match?.country?.names, locale),
             }
     } catch {
       locations[ip] = null
