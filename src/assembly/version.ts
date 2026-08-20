@@ -133,7 +133,9 @@ watch(
   { immediate: true },
 )
 
-const CACHE_DURATION = 1000 * 60 * 60
+// 10 分钟:发版后面板下一次整页加载就能看到升级提示,不用干等一小时。
+// GitHub 未认证限流 60 次/时/IP,UI + 内核两条检查按此节流合计 ~12 次/时,余量充足。
+const CACHE_DURATION = 1000 * 60 * 10
 
 interface CacheEntry<T> {
   timestamp: number
