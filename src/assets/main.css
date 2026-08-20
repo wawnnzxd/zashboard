@@ -20,6 +20,7 @@
 @import './styles/components/app.css';
 @import './styles/components/brand.css';
 @import './styles/components/tooltip.css';
+@import './styles/components/glass.css';
 
 @import './styles/utilities/appearance.css';
 @import './styles/utilities/motion.css';

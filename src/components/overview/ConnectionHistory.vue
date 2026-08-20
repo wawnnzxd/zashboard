@@ -112,7 +112,7 @@
     >
       <div :style="{ height: `${totalSize}px` }">
         <table class="table-sm table w-full rounded-none">
-          <thead class="bg-base-200 sticky top-0 z-10">
+          <thead class="bg-base-200/75 sticky top-0 z-10 backdrop-blur-md">
             <tr>
               <th
                 v-for="header in tanstackTable.getHeaderGroups()[0]?.headers"
@@ -199,7 +199,6 @@ import {
   historyStartTime,
 } from '@/store/connHistory'
 import { useStorage } from '@vueuse/core'
-
 </script>
 
 <script setup lang="ts">

@@ -1,0 +1,172 @@
+/*
+ * Liquid Glass 材质层(iOS 26 系)。令牌在 theme/tokens.css,这里是应用面。
+ *
+ * 本文件刻意**不包 @layer**:未分层样式压过 Tailwind 的全部 layer,
+ * 于是材质在这一个文件里说了算,不用去几十个模板里跟 bg-base-100 工具类打架。
+ * 用户可调外观(appearance.css)同为未分层且引入更晚、选择器更长,依旧稳赢 ——
+ * 用户设了背景图/透明度时,由用户接管,这是既有契约,别破坏。
+ *
+ * 两级材质(核心取舍):
+ *   表面(card/collapse/base-container/settings-grid) —— 身后只有静态环境光晕。
+ *     模糊一片平滑渐变得到的还是那片渐变,所以**半透明填充=真玻璃的观感**,
+ *     不付 backdrop-filter 的合成层代价。这不是省钱,是同效果的更优实现。
+ *   镶边(ctrls-bar/sidebar/dock/modal/toast) —— 内容真的会从下面滚过,
+ *     必须真 blur+saturate 才成立;同屏至多几层,代价固定且可控。
+ */
+
+/* ---------- 环境光晕:玻璃的「身后」 ---------- */
+/* base-200 打底(页面底色不变),叠三团品牌色辉光。静态、零动画、一次绘制。
+   isolation 让 z-index:-1 的伪元素停在本元素背景之上、内容之下,而不是掉到 body 后面。 */
+#app-content {
+  isolation: isolate;
+}
+#app-content::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-color: var(--color-base-200);
+  /* 亮色是「透进来的环境色」,暗色是「机身里的辉光」—— 暗色档整体调亮一档 */
+  background-image:
+    radial-gradient(
+      110rem 60rem at 10% -10%,
+      light-dark(
+        color-mix(in oklab, var(--color-primary) 11%, transparent),
+        color-mix(in oklab, var(--color-primary) 17%, transparent)
+      ),
+      transparent 62%
+    ),
+    radial-gradient(
+      90rem 55rem at 106% 6%,
+      light-dark(
+        color-mix(in oklab, var(--color-secondary, var(--color-primary)) 9%, transparent),
+        color-mix(in oklab, var(--color-secondary, var(--color-primary)) 12%, transparent)
+      ),
+      transparent 60%
+    ),
+    radial-gradient(
+      85rem 70rem at 50% 118%,
+      light-dark(
+        color-mix(in oklab, var(--color-accent, var(--color-primary)) 8%, transparent),
+        color-mix(in oklab, var(--color-accent, var(--color-primary)) 11%, transparent)
+      ),
+      transparent 58%
+    );
+}
+/* 用户设了背景图:光晕退场,画面交给壁纸与 appearance.css 的透明度/模糊滑杆 */
+#app-content.custom-background::before {
+  content: none;
+}
+
+/* ---------- 表面材质(无 backdrop-filter 的玻璃) ---------- */
+.card,
+.collapse,
+.base-container,
+.settings-grid {
+  background-color: var(--glass-surface);
+  border-radius: var(--radius-box);
+  box-shadow:
+    0 0 0 1px var(--glass-border),
+    var(--shadow-surface),
+    var(--glass-highlight);
+}
+
+/* ---------- 镶边材质(真 backdrop) ---------- */
+.glass-chrome {
+  background-color: var(--glass-chrome);
+  -webkit-backdrop-filter: blur(18px) saturate(170%);
+  backdrop-filter: blur(18px) saturate(170%);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--shadow-float), var(--glass-highlight);
+}
+
+/* 顶部控制栏:整宽玻璃横条。四边框在通栏上是噪音,只要上缘受光 + 下缘发丝分界 */
+.ctrls-bar {
+  background-color: var(--glass-chrome);
+  -webkit-backdrop-filter: blur(18px) saturate(170%);
+  backdrop-filter: blur(18px) saturate(170%);
+  box-shadow:
+    inset 0 1px 0 light-dark(rgba(255, 255, 255, 0.35), rgba(255, 255, 255, 0.06)),
+    0 1px 0 color-mix(in srgb, var(--color-base-content) 7%, transparent);
+}
+/* solid 变体(整页表单等要实底的场景)。定义在 .ctrls-bar 之后以同特异性胜出 */
+.ctrls-bar-solid {
+  background-color: var(--color-base-100);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  box-shadow: 0 1px 0 color-mix(in srgb, var(--color-base-content) 7%, transparent);
+}
+
+/* 侧栏:整高玻璃 rail。展开时会悬停在内容之上(absolute),blur 在这里是挣来的。
+   右缘发丝线替代原 border-r 硬边 —— 分界感来自材质本身,不来自一条实线 */
+.sidebar {
+  background-color: color-mix(in oklab, var(--color-base-200) 55%, transparent);
+  -webkit-backdrop-filter: blur(24px) saturate(160%);
+  backdrop-filter: blur(24px) saturate(160%);
+  box-shadow: inset -1px 0 0 var(--glass-border);
+}
+
+/* 弹窗:最厚的玻璃(80% 底色保证表单可读),配最深的浮层影 */
+.modal-box {
+  background-color: color-mix(in oklab, var(--color-base-100) 80%, transparent);
+  -webkit-backdrop-filter: blur(28px) saturate(170%);
+  backdrop-filter: blur(28px) saturate(170%);
+  box-shadow: var(--shadow-float), var(--glass-highlight);
+}
+
+/* toast:彩色语义款(error/warning/…)保持实色语义,默认款上玻璃 */
+.toast .alert:not(.alert-error, .alert-warning, .alert-success, .alert-info) {
+  background-color: var(--glass-chrome);
+  -webkit-backdrop-filter: blur(18px) saturate(170%);
+  backdrop-filter: blur(18px) saturate(170%);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--shadow-float), var(--glass-highlight);
+}
+
+/* ---------- 连续圆角(渐进增强) ---------- */
+/* iOS 的圆角是超椭圆而不是圆弧。支持的引擎直接换角形,不支持的无感回退 */
+@supports (corner-shape: squircle) {
+  .card,
+  .collapse,
+  .base-container,
+  .settings-grid,
+  .modal-box,
+  .dock,
+  .btn,
+  .badge,
+  .alert,
+  .input,
+  .select,
+  .tabs-box {
+    corner-shape: squircle;
+  }
+}
+
+/* ---------- 降透明(可访问性) ---------- */
+/* 减透明≠减模糊而已:半透明表面全部回到实底,光晕一并撤掉 */
+@media (prefers-reduced-transparency: reduce) {
+  #app-content::before {
+    background-image: none;
+  }
+  .card,
+  .collapse,
+  .base-container,
+  .settings-grid {
+    background-color: var(--color-base-100);
+  }
+  .glass-chrome,
+  .ctrls-bar,
+  .modal-box,
+  .dock,
+  .toast .alert {
+    background-color: var(--color-base-100);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+  .sidebar {
+    background-color: var(--color-base-200);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}

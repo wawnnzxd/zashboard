@@ -4,7 +4,9 @@
     class="base-container m-3 h-full overflow-auto backdrop-blur-none!"
   >
     <table :class="['table', sizeOfTable]">
-      <thead class="bg-base-100 border-base-300/60 sticky top-0 z-10 border-b backdrop-blur-none!">
+      <thead
+        class="bg-base-100/92 border-base-300/60 sticky top-0 z-10 border-b backdrop-blur-none!"
+      >
         <tr
           v-for="headerGroup in tanstackTable.getHeaderGroups()"
           :key="headerGroup.id"

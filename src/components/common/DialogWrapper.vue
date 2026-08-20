@@ -27,7 +27,7 @@
         <!-- 弹层内容，阻止点击穿透 -->
         <div
           ref="modalBoxRef"
-          class="modal-box bg-base-100 relative flex flex-col overflow-hidden p-0 outline-none max-md:max-h-[85dvh] max-md:min-h-[calc(var(--dialog-viewport-height,100dvh)*0.4)]"
+          class="modal-box relative flex flex-col overflow-hidden p-0 outline-none max-md:max-h-[85dvh] max-md:min-h-[calc(var(--dialog-viewport-height,100dvh)*0.4)]"
           :class="[blurIntensity < 5 && 'backdrop-blur-sm!', boxClass]"
           tabindex="-1"
           @click.stop
@@ -123,14 +123,22 @@ function enter() {
   opacity: 0;
 }
 
-/* 桌面端居中卡片：缩放淡入 */
+/* 桌面端居中卡片：玻璃「凝成」—— 缩放 + blur 收敛一起动，材质到位而非平面淡入 */
 .modal-enter-active .modal-box,
 .modal-leave-active .modal-box {
-  transition: transform 0.35s cubic-bezier(0.32, 0.72, 0, 1);
+  transition:
+    transform 0.35s cubic-bezier(0.32, 0.72, 0, 1),
+    filter 0.35s cubic-bezier(0.32, 0.72, 0, 1);
 }
 .modal-enter-from .modal-box,
 .modal-leave-to .modal-box {
   transform: scale(0.95);
+}
+@media (width >= 48rem) {
+  .modal-enter-from .modal-box,
+  .modal-leave-to .modal-box {
+    filter: blur(8px);
+  }
 }
 
 /* 移动端底部抽屉：从屏幕下缘滑入，时长与曲线和路由切换保持一致 */
@@ -150,6 +158,7 @@ function enter() {
   .modal-enter-from .modal-box,
   .modal-leave-to .modal-box {
     transform: none;
+    filter: none;
   }
 }
 </style>

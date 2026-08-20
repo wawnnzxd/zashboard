@@ -13,12 +13,13 @@
 
 .dock {
   @apply absolute right-2 left-2 z-30 rounded-3xl;
+  /* 材质走统一令牌(tokens.css):高光在暗色主题随 light-dark() 自动收敛,
+     不再是写死的白色 —— 原写法在暗色下白边过亮 */
+  background-color: var(--glass-chrome);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
   backdrop-filter: blur(20px) saturate(180%);
-  border: 1px solid color-mix(in srgb, var(--color-base-content) 8%, transparent);
-  box-shadow:
-    0 4px 16px color-mix(in srgb, var(--color-base-content) 6%, transparent),
-    inset 0 1px 0 color-mix(in srgb, white 35%, transparent),
-    inset 0 0 0 1px color-mix(in srgb, white 6%, transparent);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--shadow-float), var(--glass-highlight);
 }
 
 /* ---------- 侧栏 ---------- */
@@ -40,6 +41,17 @@
 }
 .settings-grid {
   @apply bg-base-100 grid grid-cols-1 overflow-hidden rounded-xl;
+}
+/* 组标签收进卡片内部(macOS 26 系统设置式):标签是卡片的第一行而不是卡片上方的
+   独立元素,于是各列第一张卡的顶边天然对齐 —— 对齐靠结构保证,不靠逐处配间距 */
+.settings-grid[data-label]::before {
+  content: attr(data-label);
+  padding: 0.875rem 1rem 0.375rem;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--color-base-content) 45%, transparent);
 }
 .setting-item {
   @apply border-base-border flex min-h-11 items-center gap-3 border-b px-4;

@@ -11,6 +11,37 @@
   /* 统一各主题的圆角令牌，让所有输入控件风格更现代 */
   --radius-field: 0.625rem;
   --radius-selector: 0.5rem;
+
+  /* ---------- Liquid Glass 材质令牌(iOS 26 系) ----------
+   * 两级材质,按「身后有没有东西在动」选用,而不是一律上 backdrop-filter:
+   *   --glass-surface  内容面板(卡片/容器)。身后只有壳层的静态环境光晕,
+   *                    半透明填充透出的颜色与「真模糊一层平滑渐变」逐像素等价,
+   *                    所以不付 backdrop-filter 的代价 —— 同样的观感,更省的实现。
+   *   --glass-chrome   浮动镶边(控制栏/dock/侧栏/弹窗/表头/浮层)。内容会从
+   *                    它们下面滚过,必须真的 blur + saturate 才成立。
+   * 高光用 light-dark():玻璃的受光面在亮色主题里是白色反光,
+   * 暗色主题里只剩一线冷光,跟着每个主题的 color-scheme 自动换挡。 */
+  --glass-surface: color-mix(in oklab, var(--color-base-100) 74%, transparent);
+  --glass-chrome: color-mix(in oklab, var(--color-base-100) 62%, transparent);
+  --glass-border: light-dark(
+    color-mix(in srgb, var(--color-base-content) 9%, transparent),
+    color-mix(in srgb, white 9%, transparent)
+  );
+  /* 上缘受光 + 内圈细光,是玻璃「厚度」的来源 */
+  --glass-highlight:
+    inset 0 1px 0 light-dark(rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0.09)),
+    inset 0 0 0 1px light-dark(rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.04));
+  /* 面板影:环境光 + 接触影两层,替代单层生硬投影 */
+  --shadow-surface:
+    0 1px 1px color-mix(in srgb, var(--color-base-content) 4%, transparent),
+    0 8px 24px -8px color-mix(in srgb, var(--color-base-content) 10%, transparent);
+  /* 浮层影:更深更远,配 modal / 菜单 / dock */
+  --shadow-float:
+    0 2px 8px color-mix(in srgb, var(--color-base-content) 8%, transparent),
+    0 24px 64px -16px color-mix(in srgb, var(--color-base-content) 22%, transparent);
+  /* 统一的强 ease-out(内置 ease-out 太弱,按压/入场都用它) */
+  --ease-out-strong: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-glass: cubic-bezier(0.32, 0.72, 0, 1);
 }
 
 /* 中性主题下延迟色也要去彩，避免和低饱和配色打架 */

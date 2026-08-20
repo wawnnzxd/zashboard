@@ -1,6 +1,6 @@
 <template>
   <div
-    class="bg-base-200 home-page flex size-full"
+    class="home-page flex size-full"
     :class="sidebarLayoutCollapsed ? 'sidebar-collapsed' : 'sidebar-expanded'"
   >
     <div
@@ -36,7 +36,7 @@
 
         <template v-if="isMiddleScreen">
           <div
-            class="bg-base-100/20 dock dock-xs z-10 h-14 w-auto"
+            class="dock dock-xs z-10 h-14 w-auto"
             :style="{
               padding: '0',
               bottom: 'calc(var(--spacing) * 2 + env(safe-area-inset-bottom))',

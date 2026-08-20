@@ -208,12 +208,90 @@
 }
 
 /* PC route transition: subtle fade, used with mode="out-in" */
-.page-enter-active,
-.page-leave-active {
-  transition: opacity 0.2s ease-in-out;
-  will-change: opacity;
+/* 页面「凝成」而不是淡入:blur 收敛 + 轻微缩放,玻璃材质到位的感觉。
+   mode=out-in,两页永不同屏,filter 只在 0.22s 内存在,不常驻合成层 */
+.page-enter-active {
+  transition:
+    opacity 0.22s var(--ease-out-strong),
+    transform 0.22s var(--ease-out-strong),
+    filter 0.22s var(--ease-out-strong);
+  will-change: opacity, transform, filter;
 }
-.page-enter-from,
+.page-leave-active {
+  transition:
+    opacity 0.15s ease-in,
+    transform 0.15s ease-in,
+    filter 0.15s ease-in;
+  will-change: opacity, transform, filter;
+}
+.page-enter-from {
+  opacity: 0;
+  transform: scale(0.985);
+  filter: blur(6px);
+}
 .page-leave-to {
   opacity: 0;
+  transform: scale(0.99);
+  filter: blur(4px);
+}
+
+/* 按压反馈:按下的瞬间界面就要「应答」(pointer-down,不等 release)。
+   整条 transition 重写是有意的:transform 用 0.16s 强 ease-out,
+   颜色态沿用 0.2s —— 只写 transform 会把 daisyUI 自己的颜色过渡踩掉 */
+.btn:not(:disabled) {
+  transition:
+    color 0.2s ease,
+    background-color 0.2s ease,
+    border-color 0.2s ease,
+    box-shadow 0.2s ease,
+    transform 0.16s var(--ease-out-strong);
+}
+.btn:not(:disabled):active {
+  transform: scale(0.96);
+}
+.dock button {
+  transition: transform 0.16s var(--ease-out-strong);
+}
+.dock button:active {
+  transform: scale(0.9);
+}
+.sidebar-route-menu > li > a {
+  transition: transform 0.16s var(--ease-out-strong);
+}
+.sidebar-route-menu > li > a:active {
+  transform: scale(0.96);
+}
+
+/* toast 入场:@starting-style 凝成(位移+缩放+淡入),退场由 notification.ts 的 WAAPI 负责 */
+.toast .alert {
+  transition:
+    opacity 0.3s var(--ease-out-strong),
+    transform 0.3s var(--ease-out-strong);
+  @starting-style {
+    opacity: 0;
+    transform: translateY(-0.5rem) scale(0.97);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .page-enter-active,
+  .page-leave-active {
+    transition: opacity 0.15s ease;
+  }
+  .page-enter-from,
+  .page-leave-to {
+    transform: none;
+    filter: none;
+  }
+  .btn:not(:disabled):active,
+  .dock button:active,
+  .sidebar-route-menu > li > a:active {
+    transform: none;
+  }
+  .toast .alert {
+    transition: opacity 0.2s ease;
+    @starting-style {
+      transform: none;
+    }
+  }
 }

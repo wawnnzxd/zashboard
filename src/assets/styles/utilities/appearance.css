@@ -77,6 +77,15 @@
   .home-page.bg-base-200 {
     background-color: transparent;
   }
+
+  /* 压在用户壁纸上的分类表头:实色 + 细描边影,亮暗图上都立得住
+     (卡片有自己的半透明底,不需要;裸在图上的只有这些表头) */
+  .settings-category-header {
+    color: var(--color-base-content);
+    text-shadow:
+      0 1px 2px color-mix(in srgb, var(--color-base-100) 80%, transparent),
+      0 0 12px color-mix(in srgb, var(--color-base-100) 60%, transparent);
+  }
 }
 
 .custom-blur {

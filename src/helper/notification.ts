@@ -24,6 +24,9 @@ export const initNotification = (toast: Ref<HTMLElement>) => {
   toastRef = toast
 }
 
+const reducedMotion =
+  typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)')
+
 const closeAlert = (toast: Toast) => {
   toast.animation?.cancel()
   // 置空 + 按身份删表:关闭后可能还有一个已入队、来不及取消的 finish 事件,
@@ -32,7 +35,20 @@ const closeAlert = (toast: Toast) => {
   if (alertMap.get(toast.key) === toast) {
     alertMap.delete(toast.key)
   }
-  toast.alert.remove()
+  // 退场与入场同路(空间一致性:从上缘来,回上缘去)。WAAPI 动画优先级高于
+  // 入场用的 CSS transition,不会打架;fill:forwards 让元素定格在终态直到移除。
+  // 二次调用无害:remove() 幂等,旧动画只是被新动画覆盖。
+  const exit = toast.alert.animate(
+    reducedMotion && reducedMotion.matches
+      ? [{ opacity: 1 }, { opacity: 0 }]
+      : [
+          { opacity: 1, transform: 'translateY(0) scale(1)' },
+          { opacity: 0, transform: 'translateY(-0.5rem) scale(0.97)' },
+        ],
+    { duration: 150, easing: 'ease-in', fill: 'forwards' },
+  )
+
+  exit.finished.catch(() => {}).finally(() => toast.alert.remove())
 }
 
 // 重新开始这条 toast 的时间轴。同 key 复用时也走这里:旧动画 cancel 掉、建一条新的,
