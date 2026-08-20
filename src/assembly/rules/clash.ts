@@ -6,11 +6,11 @@ import { ruleProviderList, rules } from './index'
 // 原实现有代际守卫、却没有按会话区分的去重键:切后端时新后端借用了旧后端的在途 promise,
 // 而那份响应又被守卫正确判为过期丢弃 —— 结果新后端的规则一次都拉不到,只有 RulesPage 重新挂载才自愈。
 // SessionResource 把「去重」与「代际」绑在同一个 epoch 上,两者不可能再各说各话。
-const rulesResource = createSessionResource(async () => {
+const rulesResource = createSessionResource(async (signal) => {
   // 并行(原实现串行两请求白付一个 RTT)
   const [{ data: ruleData }, { data: providerData }] = await Promise.all([
-    fetchRulesAPI(),
-    fetchRuleProvidersAPI(),
+    fetchRulesAPI({ signal }),
+    fetchRuleProvidersAPI({ signal }),
   ])
 
   const nextRules = ruleData.rules.map((rule) => {

@@ -98,7 +98,9 @@ export const createSessionResource = (load: Load): SessionResource => {
       inflight = null
       inflightEpoch = -1
     },
-    // 换会话:在途结果对新后端毫无价值,直接 abort 释放连接。
+    // 换会话:在途结果对新后端毫无价值 —— 放弃提交权,并 abort 掉尚未落地的请求
+    // (三个实现都把 signal 转给了 axios,所以这里是真的会掐断连接、释放并发槽,
+    //  在旧后端不可达、请求要挂 30-75 秒的场景下尤其重要)。
     reset: () => {
       epoch += 1
       lastCommitAt = 0

@@ -5,8 +5,8 @@ import { configs } from './index'
 
 // 代际守卫 / 去重 / 新鲜度 / 错误吸收统一由 SessionResource 承担:
 // 这里只负责「解析 → 返回提交闭包」,旧后端的慢响应不可能落进新会话。
-const configsResource = createSessionResource(async () => {
-  const { data } = await getConfigsAPI()
+const configsResource = createSessionResource(async (signal) => {
+  const { data } = await getConfigsAPI({ signal })
 
   return () => {
     configs.value = data

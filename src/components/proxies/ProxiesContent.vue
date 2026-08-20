@@ -11,8 +11,10 @@ const props = defineProps<{
   renderProxies: string[]
 }>()
 
+// 第一个实参必须是 getter:传数字等于只喂一个挂载时的快照,组内节点数变化后
+// canLoadMore 恒为 false,无限滚动从此停摆(搜索后清空关键字必现)。
 const { maxProxies } = useCalculateMaxProxies(
-  props.renderProxies.length,
+  () => props.renderProxies.length,
   props.renderProxies.indexOf(props.now ?? ''),
 )
 const proxies = computed(() => props.renderProxies.slice(0, maxProxies.value))

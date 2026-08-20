@@ -19,6 +19,7 @@
       :data="renderLogs"
       :size="44"
       :get-item-key="logItemKey"
+      :min-alive-key="minAliveLogSeq"
     >
       <template v-slot:before>
         <LogsCtrl />
@@ -118,6 +119,11 @@ const renderLogs = computed(() => {
 
 // 以 seq 作虚拟行身份键:日志头部插入时 index 键会让全部可见行错位重渲染,
 // seq 稳定后未变行 props 恒等,每次 flush 只渲染新增行
+// 尺寸缓存的存活下界必须取自**未过滤**的 logs:用 renderLogs(已过滤)会把仍在缓冲区、
+// 只是当前被过滤掉的行的测量值一并删掉,清空过滤词那一瞬间整屏行高跳变。
+// logs 是最新在前,所以最小 seq 在数组末尾。
+const minAliveLogSeq = computed(() => logs.value[logs.value.length - 1]?.seq)
+
 const logItemKey = (index: number) => renderLogs.value[index]?.seq ?? index
 
 const connectionLogID = ref('')

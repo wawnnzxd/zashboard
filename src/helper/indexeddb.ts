@@ -6,8 +6,10 @@ import { computed, ref, watch } from 'vue'
  * 一个 key-value 持久层的完整契约(调用方不需要再自己包 try/catch):
  *
  * - **不抛。** 写(put/clear)返回 `true` = 已提交落库,`false` = 只留在内存;
- *   读(get)失败按「没有这条数据」处理,返回 undefined。持久化坏掉从来不是
- *   调用方的错误路径,而是「这一份数据只活在本会话」这一个降级事实。
+ *   读有两个入口:`get` 把失败折叠成「没有这条数据」(undefined),适合背景图这类
+ *   两者行为相同的场景;`getOutcome` 把「读不出来」与「确实没有」分开,供必须区分的
+ *   调用方使用 —— 连接历史就属于后者,把读失败当成空表会导致空聚合覆盖磁盘上的真实历史。
+ *   持久化坏掉从来不是调用方的错误路径,而是「这一份数据只活在本会话」这一个降级事实。
  * - **写对内存缓存同步生效**:cacheMap 在第一个 await 之前就更新,所以调用方
  *   紧接着改 ref 触发的 watch(pre-flush 微任务)一定读得到新值。晚一拍写缓存
  *   就是「换背景图后仍显示上一张」的根因,这个顺序是实现的不变量,不是调用约定。
@@ -93,20 +95,32 @@ const useIndexedDB = (dbKey: string) => {
     })
   }
 
-  const get = async (key: string) => {
+  // 区分「没有这条数据」与「读不出来」:两者对背景图是一回事(都当没有),
+  // 但对连接历史是天壤之别 —— 读失败时若当成「没有历史」,本会话的空表会在
+  // 30 秒后被 flush 回磁盘,把真实历史永久抹掉。所以读失败必须能被上层看见。
+  const getOutcome = async (key: string): Promise<TransactionOutcome<string | undefined>> => {
     if (cacheMap.has(key)) {
-      return cacheMap.get(key)
+      return { ok: true, result: cacheMap.get(key) }
     }
     const outcome = await runTransaction<{ key: string; value: string } | undefined>(
       'readonly',
       (store) => store.get(key) as IDBRequest<{ key: string; value: string } | undefined>,
     )
 
-    if (!outcome.ok || outcome.result === undefined) {
-      return undefined
+    if (!outcome.ok) {
+      return { ok: false }
+    }
+    if (outcome.result === undefined) {
+      return { ok: true, result: undefined }
     }
     cacheMap.set(key, outcome.result.value)
-    return outcome.result.value
+    return { ok: true, result: outcome.result.value }
+  }
+
+  const get = async (key: string) => {
+    const outcome = await getOutcome(key)
+
+    return outcome.ok ? outcome.result : undefined
   }
 
   const clear = () => {
@@ -130,6 +144,7 @@ const useIndexedDB = (dbKey: string) => {
   return {
     put,
     get,
+    getOutcome,
     clear,
   }
 }
@@ -201,17 +216,23 @@ export const saveConnectionHistoryToIndexedDB = async (
   return connectionHistoryDB.put(`${uuid}-${aggregationType}`, jsonData)
 }
 
-// 空数组同时表示「没有历史」和「读不出来」:两种情况下正确的行为都是从零开始累计。
+// 返回 null = **读不出来**(事务失败/库打不开),与「确实没有历史」的空数组严格区分:
+// 调用方必须据此进入只读降级,否则本会话的空聚合会在下一次落盘时覆盖掉磁盘上的真实历史。
+// 解析失败按「这条坏了」当空数组处理 —— 那条记录本来就没救了,重写它是正确的。
 export const getConnectionHistoryFromIndexedDB = async (
   uuid: string,
   aggregationType: ConnectionHistoryType,
-): Promise<ConnectionHistoryData[]> => {
-  const jsonData = await connectionHistoryDB.get(`${uuid}-${aggregationType}`)
-  if (!jsonData) {
+): Promise<ConnectionHistoryData[] | null> => {
+  const outcome = await connectionHistoryDB.getOutcome(`${uuid}-${aggregationType}`)
+
+  if (!outcome.ok) {
+    return null
+  }
+  if (!outcome.result) {
     return []
   }
   try {
-    return JSON.parse(jsonData) as ConnectionHistoryData[]
+    return JSON.parse(outcome.result) as ConnectionHistoryData[]
   } catch {
     return []
   }

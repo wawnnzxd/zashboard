@@ -59,8 +59,11 @@ const setProxyNodeFields = (name: string, fields: Partial<Proxy>) => {
 // 代际比对由 SessionResource 统一做一次 —— 原实现在这里靠 `fetchTime !== nowTime` 自守,
 // 而它在有了 in-flight 去重之后恒为 false(第二个调用者拿到的是同一个 promise,根本不会重设 fetchTime),
 // 是一道死掉的守卫;真正需要的「旧后端响应不得回填新会话」当时完全没有。
-const resolveProxies = async () => {
-  const [proxyRes, providerRes] = await Promise.all([fetchProxiesAPI(), fetchProxyProviderAPI()])
+const resolveProxies = async (signal: AbortSignal) => {
+  const [proxyRes, providerRes] = await Promise.all([
+    fetchProxiesAPI({ signal }),
+    fetchProxyProviderAPI({ signal }),
+  ])
   const proxyData = proxyRes.data
   const providerData = providerRes.data
 

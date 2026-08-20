@@ -20,8 +20,13 @@ export type ConnectionDisplayOptions = {
 // store 直接消费,无需再做快照 diff(那只是 clash 全量快照的内部细节)。
 export interface ConnectionsSnapshot {
   // 当前活跃连接,已带瞬时速率(downloadSpeed/uploadSpeed)。
+  // **量纲:字节/秒**。各后端实现自行按本拍的真实推送间隔归一化 —— 推送节拍并不总是 1 秒
+  // (WS 重连、标签页节流后的追帧、后端负载抖动都会偏离),消费方拿不到也不需要知道节拍,
+  // 所以这个除法必须留在实现里,而不是让每个消费点各记一次。
   active: Connection[]
   // 本拍新关闭的连接(增量),供 store 追加进已关闭列表并落历史。
+  // 速率恒为 0(两个后端已对齐):否则已关闭条目会永久定格显示断开前最后一秒的速率,
+  // 在「全部」tab 按速率排序时把死连接顶到活跃连接前面。
   closed: Connection[]
   // 内核自启动的上/下行累计。clash 的连接 WS 消息原生携带,在此透传;
   // sing-box 的连接流不带总量,由 status 统计流另行提供(见 store/overview)。

@@ -23,7 +23,8 @@ const activeIndex = groupedProxies.value.reduce((acc, { proxies }) => {
   return acc + proxies.length
 }, 0)
 
-const { maxProxies } = useCalculateMaxProxies(props.renderProxies.length, activeIndex)
+// 同 ProxiesContent:第一个实参必须是 getter,否则无限滚动会在节点数变化后停摆。
+const { maxProxies } = useCalculateMaxProxies(() => props.renderProxies.length, activeIndex)
 
 const truncatedProxies = computed(() => {
   let displayCount = 0

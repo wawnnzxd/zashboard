@@ -127,7 +127,8 @@ import {
   PauseIcon,
   PlayIcon,
 } from '@heroicons/vue/24/outline'
-import { useDocumentVisibility, useElementVisibility, useWindowSize } from '@vueuse/core'
+import { useVisibilityGate } from '@/composables/gatedComputed'
+import { useWindowSize } from '@vueuse/core'
 import type { CSSProperties } from 'vue'
 import { computed, nextTick, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -144,11 +145,10 @@ const { colors, fontFamily } = useChartTheme(chartRef)
 const isPaused = computed(() => isManuallyPaused.value || isTooltipVisible.value)
 // useEChart 的门控只挡住 setOption,挡不住上游 computed 求值;这里在组件侧复述一遍
 // 同样的可见性条件,让派生数据本身也能停下来(useEChart 目前没把 hidden 暴露出来)
-const chartVisible = useElementVisibility(chartRef)
-const documentVisibility = useDocumentVisibility()
-const frozen = computed(
-  () => isPaused.value || !chartVisible.value || documentVisibility.value !== 'visible',
-)
+// 与 useEChart 共用同一扇可见性门(下方 useEChart 调用把它传了进去):
+// 各建各的等于同一个 DOM 元素上挂两个 IntersectionObserver,还要靠人推理两份真相是否同步。
+const hidden = useVisibilityGate(chartRef)
+const frozen = computed(() => isPaused.value || hidden.value)
 const shouldRotate = computed(
   () => isFullScreen.value && isMiddleScreen.value && windowHeight.value > windowWidth.value,
 )
@@ -315,6 +315,7 @@ const options = computed<EChartOption>(() => ({
 }))
 
 const { resize } = useEChart(chartRef, options, {
+  hidden,
   paused: isPaused,
   isEmpty,
   onInit: (chart) => {

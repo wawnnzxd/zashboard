@@ -48,6 +48,8 @@ export const loadFonts = () => {
     // 用 watch 而不是读一次:让「当前家族的 @font-face 一定在场」这条不变量留在本模块,
     // 调用方不必在切字体时记得再调一次。import() 有模块缓存,来回切不会重复请求;
     // 首次切到某家族时该份 CSS 才动态加载,会有一次 FOUT。
-    watch(font, (value) => void bundledFontCSS[value](), { immediate: true })
+    // 可选链:localStorage 里存着旧版本或手改过的字体名时(不在 FONTS 枚举里),
+    // 直接调用会 TypeError,整套字体加载当场哑掉 —— 退化成系统字体即可,不该抛。
+    watch(font, (value) => void bundledFontCSS[value]?.(), { immediate: true })
   }
 }

@@ -21,6 +21,7 @@ import type {
   Rule,
   RuleProvider,
 } from '@/types'
+import type { AxiosRequestConfig } from 'axios'
 import axios from 'axios'
 import ReconnectingWebSocket from 'reconnectingwebsocket'
 import { shallowRef } from 'vue'
@@ -31,8 +32,8 @@ import { shallowRef } from 'vue'
 
 export const fetchClashVersion = () => axios.get<{ version: string }>('/version')
 
-export const fetchProxiesAPI = () => {
-  return axios.get<{ proxies: Record<string, Proxy> }>('/proxies')
+export const fetchProxiesAPI = (config?: AxiosRequestConfig) => {
+  return axios.get<{ proxies: Record<string, Proxy> }>('/proxies', config)
 }
 
 export const fetchSingleProxyAPI = (name: string) => {
@@ -85,8 +86,8 @@ export const fetchProxyGroupLatencyAPI = (proxyName: string, url: string, timeou
   })
 }
 
-export const fetchProxyProviderAPI = () => {
-  return axios.get<{ providers: Record<string, ProxyProvider> }>('/providers/proxies')
+export const fetchProxyProviderAPI = (config?: AxiosRequestConfig) => {
+  return axios.get<{ providers: Record<string, ProxyProvider> }>('/providers/proxies', config)
 }
 
 export const updateProxyProviderAPI = (name: string) => {
@@ -102,12 +103,12 @@ export const proxyProviderHealthCheckAPI = (name: string) => {
   )
 }
 
-export const fetchRulesAPI = () => {
-  return axios.get<{ rules: Rule[] }>('/rules')
+export const fetchRulesAPI = (config?: AxiosRequestConfig) => {
+  return axios.get<{ rules: Rule[] }>('/rules', config)
 }
 
-export const fetchRuleProvidersAPI = () => {
-  return axios.get<{ providers: Record<string, RuleProvider> }>('/providers/rules')
+export const fetchRuleProvidersAPI = (config?: AxiosRequestConfig) => {
+  return axios.get<{ providers: Record<string, RuleProvider> }>('/providers/rules', config)
 }
 
 export const updateRuleProviderAPI = (name: string) => {
@@ -122,8 +123,8 @@ export const disconnectAllClashAPI = () => {
   return axios.delete('/connections')
 }
 
-export const getConfigsAPI = () => {
-  return axios.get<Config>('/configs')
+export const getConfigsAPI = (config?: AxiosRequestConfig) => {
+  return axios.get<Config>('/configs', config)
 }
 
 export const patchConfigsAPI = (configs: Record<string, string | boolean | object | number>) => {

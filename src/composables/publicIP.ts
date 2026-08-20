@@ -38,8 +38,9 @@ const statusInfo = (key: string): PublicIPInfo => ({
 })
 
 const currentIP = (source: PublicIPSource) =>
-  (source === 'global' ? ipForGlobal.value : ipForChina.value).ipWithPrivacy.find(isValidPublicIP) ??
-  ''
+  (source === 'global' ? ipForGlobal.value : ipForChina.value).ipWithPrivacy.find(
+    isValidPublicIP,
+  ) ?? ''
 
 let inflight: Promise<void> | null = null
 

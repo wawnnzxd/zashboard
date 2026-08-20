@@ -162,17 +162,6 @@
   }
 }
 
-/* ---------- 杂项 ---------- */
-
-@keyframes progressBar {
-  from {
-    width: 100%;
-  }
-  to {
-    width: 0%;
-  }
-}
-
 /* ---------- 路由切换 ---------- */
 
 /* iOS-style slide transitions */

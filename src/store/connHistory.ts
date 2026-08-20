@@ -226,6 +226,12 @@ const loadHistoryMaps = async (targetUuid: string) => {
   for (const type of allHistoryTypes) {
     let data = await getConnectionHistoryFromIndexedDB(targetUuid, type)
 
+    // null = 读不出来(不是「没有历史」)。此时绝不能当空表继续:本会话的空聚合
+    // 会在 30 秒后被 flush 回磁盘,把真实历史永久抹掉。整个会话转为只读降级。
+    if (data === null) {
+      throw new Error(`Failed to read connection history: ${type}`)
+    }
+
     if (data.length > TRIM_THRESHOLD) {
       data = data.sort((a, b) => b.download - a.download).slice(0, TRIM_KEEP)
       await saveConnectionHistoryToIndexedDB(targetUuid, type, data)
