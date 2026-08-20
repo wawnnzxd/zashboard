@@ -23,6 +23,12 @@ export const createLogsAccumulator = (
   let logsTemp: LogWithSeq[] = []
 
   const flush = throttle(() => {
+    // 空批直接退出。暂停期间内核照样推日志,每条都被 push 丢弃却仍调一次 flush;
+    // 照旧 concat+slice 会产出内容逐字相同、引用却是新的数组,而下游全按引用 memo
+    // (LogsPage 的正则过滤、tanstack 的 core/sorted rowModel),
+    // 于是每 500ms 白重跑一遍上千行的过滤与行模型重建。
+    if (!logsTemp.length) return
+
     // 批内 push(O(1))+ flush 时一次 reverse,保持"最新在前";原 unshift 单批 O(k²)
     logs.value = logsTemp.reverse().concat(logs.value).slice(0, logRetentionLimit.value)
     logsTemp = []

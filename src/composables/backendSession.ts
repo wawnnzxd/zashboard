@@ -7,6 +7,7 @@ import { preloadLogsBackend } from '@/assembly/logs'
 import { preloadOverviewBackend } from '@/assembly/overview'
 import { fetchProxies, proxiesTabShow, resetProxies } from '@/assembly/proxies'
 import { fetchRules, rulesTabShow } from '@/assembly/rules'
+import { resetSessionResources } from '@/assembly/sessionResource'
 import { PROXY_TAB_TYPE, RULE_TAB_TYPE } from '@/constant'
 import { initConnections, stopConnections } from '@/store/connections'
 import { initLogs, stopLogs } from '@/store/logs'
@@ -20,6 +21,10 @@ let sessionEpoch = 0
 
 export const stopBackendSession = () => {
   sessionEpoch++
+  // REST 资源(proxies / rules / configs)整体换代:在途请求作废、新鲜度清零。
+  // 没有这一步时,新后端会借用旧后端的在途请求(自己一次都不发),
+  // 旧后端的慢响应还可能回填进新会话。
+  resetSessionResources()
   stopConnections()
   stopLogs()
   stopSatistic()

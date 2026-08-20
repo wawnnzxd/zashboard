@@ -5,13 +5,13 @@
       <div class="flex items-center gap-2">
         <button
           class="btn btn-sm"
-          @click="((connectionCardLines = SIMPLE_CARD_STYLE), setRestOfColumns())"
+          @click="((connectionCardLines = clonePreset(SIMPLE_CARD_STYLE)), setRestOfColumns())"
         >
           {{ $t('simpleCardPreset') }}
         </button>
         <button
           class="btn btn-sm"
-          @click="((connectionCardLines = DETAILED_CARD_STYLE), setRestOfColumns())"
+          @click="((connectionCardLines = clonePreset(DETAILED_CARD_STYLE)), setRestOfColumns())"
         >
           {{ $t('detailedCardPreset') }}
         </button>
@@ -112,6 +112,11 @@ import { ref } from 'vue'
 import Draggable from 'vuedraggable'
 
 const restOfColumns = ref<CONNECTIONS_TABLE_ACCESSOR_KEY[]>([])
+
+// 预设必须整份克隆后再交给 storage：本组件的 splice / push / 下标赋值和 Draggable 的
+// v-model 都是就地写，直接塞常量本体等于把内置预设永久改坏；同时新数组才能让 ref 的
+// Object.is 比较判定为「变了」，否则首装用户点预设按钮完全没反应
+const clonePreset = (preset: CONNECTIONS_TABLE_ACCESSOR_KEY[][]) => preset.map((line) => [...line])
 
 const setRestOfColumns = () => {
   restOfColumns.value = Object.values(CONNECTIONS_TABLE_ACCESSOR_KEY).filter(

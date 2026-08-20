@@ -178,19 +178,27 @@ const autoSwitchBackend = async () => {
   const otherEnds = backendList.value.filter((end) => end.uuid !== activeUuid.value)
 
   autoSwitchBackendDialog.value = false
-  const avaliable = await Promise.race<Backend>(
-    otherEnds.map((end) => {
-      return new Promise((resolve, reject) => {
-        setTimeout(() => {
-          reject()
-        }, 10000)
-        isBackendAvailable(end).then((res) => {
-          if (res) {
-            resolve(end)
-          }
-        })
-      })
-    }),
+
+  if (!otherEnds.length) {
+    showNotification({ content: 'noAvailableBackend', type: 'alert-error' })
+    return
+  }
+
+  // 竞速项超时后 resolve(null) 而不是 reject:reject 会让整个 race 以拒绝告终,
+  // 于是「其余后端也全都连不上」这条最需要告诉用户的路径反而什么都不显示
+  // (人在外面打开面板、点了确认、等 10 秒、界面毫无动静)。
+  const avaliable = await Promise.race<Backend | null>(
+    otherEnds.map(
+      (end) =>
+        new Promise<Backend | null>((resolve) => {
+          setTimeout(() => resolve(null), 10000)
+          isBackendAvailable(end).then((res) => {
+            if (res) {
+              resolve(end)
+            }
+          })
+        }),
+    ),
   )
 
   if (avaliable) {
@@ -202,7 +210,10 @@ const autoSwitchBackend = async () => {
       },
       type: 'alert-success',
     })
+    return
   }
+
+  showNotification({ content: 'noAvailableBackend', type: 'alert-error' })
 }
 
 const documentVisible = useDocumentVisibility()

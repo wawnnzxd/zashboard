@@ -245,6 +245,8 @@ const download = async (background = false) => {
   }
 
   try {
+    // ⚠️ 硬编码地址,与设置里的 GeoIP 库地址完全脱钩(详见 types.ts 里 DBIP_CITY_URL 的说明)。
+    // 要打通得让宿主把地址随请求传进来,Worker 侧不该自己去读设置(它拿不到 store)。
     const response = await fetch(DBIP_CITY_URL, { signal: controller.signal })
 
     if (!response.ok || !response.body) {

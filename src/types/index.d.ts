@@ -91,7 +91,9 @@ export type Rule = {
   // mihomo
   index: number
   extra?: {
-    disabled: false
+    // 这里原本写成字面量 false,于是 isRuleDisabled 走 extra 分支时返回值类型恒为 false,
+    // 依赖它的分支在类型层面全是死代码,写入 true 也会报错。实际取值是布尔。
+    disabled: boolean
     hitAt: string
     hitCount: number
     missAt: string

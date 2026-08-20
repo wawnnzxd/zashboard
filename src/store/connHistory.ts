@@ -58,8 +58,15 @@ const FLUSH_EVERY_TICKS = 6
 // 与 init 修剪同规则:超过 2000 键按下载量保留前 1500,运行期同样执行,防会话内无界增长。
 const TRIM_THRESHOLD = 2000
 const TRIM_KEEP = 1500
+// pending 只在 init 的加载窗口里有消费者。IDB 冷启动慢(大历史)时同样会积压,不只是
+// 持久层坏掉才会 —— 所以上限是无条件的。历史统计允许有损,标签页被撑爆不允许。
+const PENDING_LIMIT = 5000
 
 let ready = false
+// 持久层整体不可用(库打不开 / 配额耗尽)后,继续每 30s 克隆一遍全量快照再去撞墙
+// 是纯浪费,还会刷满控制台。置位后落盘早退,内存态与界面照常工作;
+// 用户手动清空历史成功即视为库又能写,自动复位重试。
+let persistenceBroken = false
 let sessionUuid = ''
 let sessionGeneration = 0
 let initEpoch = 0
@@ -130,21 +137,21 @@ const snapshotMaps = (
     allHistoryTypes.map((type) => [type, Array.from(maps[type].values(), (item) => ({ ...item }))]),
   ) as Record<ConnectionHistoryType, ConnectionHistoryData[]>
 
+// 返回落库成功的类型数。helper/indexeddb 的写不抛,失败即返回 false,所以这里
+// 不需要 try/catch;区分「部分失败」和「一条都没写进去」是给调用方判断
+// 「偶发抖动值得重试」还是「持久层整体没了」用的。
 const saveSnapshot = async (
   targetUuid: string,
   snapshot: Record<ConnectionHistoryType, ConnectionHistoryData[]>,
 ) => {
-  let success = true
+  let saved = 0
 
   for (const type of allHistoryTypes) {
-    try {
-      await saveConnectionHistoryToIndexedDB(targetUuid, type, snapshot[type])
-    } catch (error) {
-      success = false
-      console.error(`Failed to save connection history for ${type}:`, error)
+    if (await saveConnectionHistoryToIndexedDB(targetUuid, type, snapshot[type])) {
+      saved++
     }
   }
-  return success
+  return saved
 }
 
 const flushCurrentSession = () => {
@@ -152,10 +159,16 @@ const flushCurrentSession = () => {
     return Promise.resolve()
   }
 
+  // 修剪是内存上限,不属于落盘:持久层坏掉时也必须照跑,否则 aggMaps 会无界增长。
   for (const type of allHistoryTypes) {
     if (trimMap(aggMaps, type)) {
       dirtyTypes.add(type)
     }
+  }
+
+  // 落盘停了,内存态与界面照常(dirty 保持 true,下一拍还会来修剪)。
+  if (persistenceBroken) {
+    return Promise.resolve()
   }
 
   // 在第一个 await 之前同时捕获 UUID 与全部数据,避免切后端时从共享 Map
@@ -166,9 +179,18 @@ const flushCurrentSession = () => {
 
   dirty = false
   return enqueuePersistence(async () => {
-    const success = await saveSnapshot(targetUuid, snapshot)
+    const saved = await saveSnapshot(targetUuid, snapshot)
 
-    if (!success && sessionUuid === targetUuid && sessionGeneration === targetGeneration) {
+    if (saved === allHistoryTypes.length) {
+      return
+    }
+    // 一条都没写进去 = 系统性失败(库打不开 / 配额满),重试只会每 30s 再来一遍;
+    // 部分成功才是值得重试的偶发抖动。
+    if (saved === 0) {
+      persistenceBroken = true
+      return
+    }
+    if (sessionUuid === targetUuid && sessionGeneration === targetGeneration) {
       dirty = true
     }
   })
@@ -239,6 +261,11 @@ const settleStaleContext = async (context: InitContext, maps: AggregationMaps) =
     return
   }
 
+  // 落盘是这条路径存在的唯一意义(maps 随后即被丢弃),持久层已判定不可用就直接放弃。
+  if (persistenceBroken) {
+    return
+  }
+
   accumulateInto(maps, pending)
   const snapshot = snapshotMaps(maps)
 
@@ -280,7 +307,18 @@ export const initAggregatedDataMap = async () => {
   currentContext = context
   resetCurrentSession(context.uuid)
 
-  const loadedMaps = await enqueuePersistence(() => loadHistoryMaps(context.uuid))
+  let loadedMaps: AggregationMaps
+
+  try {
+    loadedMaps = await enqueuePersistence(() => loadHistoryMaps(context.uuid))
+  } catch (error) {
+    // 加载失败必须降级成「纯内存会话」,不能停在半初始化态:ready 永远为 false 的话,
+    // 之后每条关闭的连接都会被推进 pending 且再无消费者,概览的历史卡也永久空白。
+    // 同时置位 persistenceBroken —— 读不出来却照常写,会拿本会话的空表覆盖掉磁盘上的历史。
+    console.error('Failed to load connection history:', error)
+    loadedMaps = createAggregationMaps()
+    persistenceBroken = true
+  }
 
   if (context.epoch !== initEpoch) {
     await settleStaleContext(context, loadedMaps)
@@ -312,7 +350,12 @@ export const clearConnectionHistory = async () => {
 
   // 清理与所有已排队的落盘/加载串行:先前的写入最多先完成,随后会被这次 clear
   // 统一删除,不会在 clear 之后又把旧快照写回。
-  await enqueuePersistence(() => clearConnectionHistoryFromIndexedDB())
+  const cleared = await enqueuePersistence(() => clearConnectionHistoryFromIndexedDB())
+
+  // 清空能成功,说明库本身可写(之前多半只是配额满),放开落盘重试。
+  if (cleared) {
+    persistenceBroken = false
+  }
 
   if (context.epoch !== initEpoch) {
     await settleStaleContext(context, createAggregationMaps())
@@ -412,8 +455,9 @@ export const saveConnectionHistory = (newClosedConnections: Connection[]) => {
   const targetUuid = uuid()
 
   if (!ready || targetUuid !== sessionUuid) {
-    // init 加载期间到达的关闭连接先缓冲,加载完成后统一并入,不丢数据
-    if (currentContext?.uuid === targetUuid) {
+    // init 加载期间到达的关闭连接先缓冲,加载完成后统一并入,不丢数据;
+    // 超过上限就停止缓冲(见 PENDING_LIMIT)
+    if (currentContext?.uuid === targetUuid && currentContext.pending.length < PENDING_LIMIT) {
       currentContext.pending.push(...newClosedConnections)
     }
     return

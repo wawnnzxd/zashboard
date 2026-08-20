@@ -53,6 +53,16 @@
   </div>
 </template>
 
+<script lang="ts">
+import { ref } from 'vue'
+
+// 测速结果放在 composables/overview 的模块级 ref 里,「是否正在测速」却曾是组件私有 ref
+// —— 测速途中离开概览页再回来,卡片重挂就把它复位成 false,上一轮循环还在跑就能再开
+// 一轮:两轮同时往同一个数组 append,统计混算两轮样本(自动测速那条路径连点击都不用,
+// 重挂时数组刚被清空、看着像「还没测过」就会自己再开一轮)。守卫必须和它守护的数据同寿命。
+const isTesting = ref(false)
+</script>
+
 <script setup lang="ts">
 import {
   getBaiduLatencyAPI,
@@ -69,7 +79,7 @@ import {
 import { getColorForLatency } from '@/helper'
 import { autoConnectionCheck } from '@/store/settings'
 import { BoltIcon } from '@heroicons/vue/24/outline'
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted } from 'vue'
 import LatencyChart from './LatencyChart.vue'
 
 const ROUNDS = 10
@@ -80,8 +90,6 @@ const targets = [
   { name: 'GitHub', ref: githubLatency, api: getGithubLatencyAPI },
   { name: 'YouTube', ref: youtubeLatency, api: getYouTubeLatencyAPI },
 ]
-
-const isTesting = ref(false)
 
 // 仅用成功(>0)样本统计 min / avg / max。
 const computeStats = (values: number[]) => {

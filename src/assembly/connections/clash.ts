@@ -16,8 +16,21 @@ export const disconnectByIdAPI = disconnectClashByIdAPI
 
 export const disconnectAllAPI = disconnectAllClashAPI
 
+// 一拍能被当作速率基准的间隔区间。上界:超过它说明 WS 断过一段(ReconnectingWebSocket 重连
+// 复用同一个 handler,previousMap 跨重连存活,差值会是整段断线的累计字节);下界:标签页被冻结
+// 后恢复,排队的消息会在几毫秒内连着送达,此时到达间隔根本不是快照之间的真实时距,拿它做除数
+// 反而会把尖刺放大。两侧越界都记为「本拍无有效时间基准」,速率归零 —— 与「首次连接首拍为 0」
+// 的既有语义一致,也好过把几分钟的平均值伪装成瞬时速率。下一拍即自愈。
+const SPEED_INTERVAL_MIN_MS = 200
+const SPEED_INTERVAL_MAX_MS = 3000
+
 // Clash WS 每拍推送活跃连接全量快照。瞬时速率与已关闭连接需与上一拍 diff 求得 —— 这是 clash
 // 协议固有的内部细节,在此完成,对外只暴露统一的 ConnectionsSnapshot。
+//
+// 量纲约定(ConnectionsSnapshot 的一部分):产出的 downloadSpeed/uploadSpeed 单位是**字节/秒**,
+// 不是「相邻两拍的字节差」。全部下游(表格 DlSpeed 列、chainTrafficMap 喂代理组头、速率排序键、
+// 地球仪流光强度)本来就按「/s」解释这两个字段,而推送节拍只在理想情况下正好是 1 秒。把「除以
+// 本拍真实间隔」吃进这里,下游既不必知道、也无从知道节拍,契约才是自洽的。
 export const fetchConnectionsAPI = () => {
   const ws = createClashWebSocket<{
     connections: ClashConnectionRawMessage[]
@@ -28,21 +41,37 @@ export const fetchConnectionsAPI = () => {
 
   const data = shallowRef<ConnectionsSnapshot>()
   let previousMap = new Map<string, Connection>()
+  // 上一拍的到达时刻,必须与 previousMap 同为闭包变量(提到模块级会让多后端 / 重建流互相串扰)。
+  // 用 performance.now() 而不是 Date.now():它单调递增,不会被系统对时拨动,而合盖休眠期间照常
+  // 推进 —— 正是「断线缺口」需要量的东西。
+  let lastMessageAt = 0
 
   const unwatch = watch(ws.data, (raw) => {
     if (!raw) return
+
+    const now = performance.now()
+    const elapsed = lastMessageAt === 0 ? 0 : now - lastMessageAt
+
+    lastMessageAt = now
+
+    // 0 表示本拍没有可信的时间基准(首拍 / 重连缺口 / 冻结后追帧),下面据此把速率归零;
+    // 非 0 时它就是除数,恒 >= SPEED_INTERVAL_MIN_MS / 1000,不会产生 Infinity 或 NaN。
+    const intervalSeconds =
+      elapsed >= SPEED_INTERVAL_MIN_MS && elapsed <= SPEED_INTERVAL_MAX_MS ? elapsed / 1000 : 0
 
     const currentMap = new Map<string, Connection>()
     const active = (raw.connections ?? []).map((conn) => {
       const connection = conn as Connection
       const pre = previousMap.get(connection.id)
 
-      if (!pre) {
+      if (!pre || intervalSeconds === 0) {
         connection.downloadSpeed = 0
         connection.uploadSpeed = 0
       } else {
-        connection.downloadSpeed = asClash(connection).download - asClash(pre).download
-        connection.uploadSpeed = asClash(connection).upload - asClash(pre).upload
+        connection.downloadSpeed =
+          (asClash(connection).download - asClash(pre).download) / intervalSeconds
+        connection.uploadSpeed =
+          (asClash(connection).upload - asClash(pre).upload) / intervalSeconds
       }
 
       previousMap.delete(connection.id)
@@ -50,8 +79,16 @@ export const fetchConnectionsAPI = () => {
       return connection
     })
 
-    // 上一拍存在、这一拍消失的连接即新关闭。
-    const closed = Array.from(previousMap.values())
+    // 上一拍存在、这一拍消失的连接即新关闭。速率归零(已经断了,留着上一拍的瞬时值会让「已关闭」
+    // 列表永久显示 3.2 MB/s 这种定格值,ALL tab 按速率排序时死连接还会被顶到活跃连接前面),
+    // 与 sing-box 侧的 `enrich(c, 0, 0)` 对齐。
+    // 必须克隆而非就地改写:这些对象正是上一拍 activeConnections 数组里的成员,就地归零会把暂停
+    // 期间冻结的那批行悄悄改掉,任何后续重渲染都会露馅。
+    const closed = Array.from(previousMap.values(), (conn) => ({
+      ...conn,
+      downloadSpeed: 0,
+      uploadSpeed: 0,
+    }))
     previousMap = currentMap
 
     data.value = {

@@ -12,6 +12,7 @@ import {
 } from '@/api/clash'
 import { can } from '@/assembly/backend'
 import { disconnectConnections } from '@/assembly/connections'
+import { createSessionResource } from '@/assembly/sessionResource'
 import { GLOBAL, IPV6_TEST_URL, NOT_CONNECTED, PROXY_TYPE, SPEEDTEST_MODE } from '@/constant'
 import { getConnectionChains, isProxyGroup } from '@/helper'
 import { showNotification } from '@/helper/notification'
@@ -30,7 +31,6 @@ import { last } from 'lodash-es'
 import pLimit from 'p-limit'
 import {
   batchTestingCount,
-  getLatencyByName,
   getNowProxyNodeName,
   getTestUrl,
   IPv6Map,
@@ -40,10 +40,6 @@ import {
   proxyProviederList,
   speedtestUrlWithDefault,
 } from './index'
-
-let fetchTime = 0
-let lastFetchDoneAt = 0
-let inflightFetch: Promise<void> | null = null
 
 // 单节点/单组的不可变更新:换外层引用触发 shallowRef,未涉及的节点保持引用稳定。
 const setProxyNode = (name: string, node: Proxy) => {
@@ -59,18 +55,14 @@ const setProxyNodeFields = (name: string, fields: Partial<Proxy>) => {
   setProxyNode(name, { ...node, ...fields })
 }
 
-const doFetchProxies = async () => {
-  const nowTime = Date.now()
-
-  fetchTime = nowTime
-
+// 解析阶段:只做网络与纯计算,把所有写入收进返回的提交闭包。
+// 代际比对由 SessionResource 统一做一次 —— 原实现在这里靠 `fetchTime !== nowTime` 自守,
+// 而它在有了 in-flight 去重之后恒为 false(第二个调用者拿到的是同一个 promise,根本不会重设 fetchTime),
+// 是一道死掉的守卫;真正需要的「旧后端响应不得回填新会话」当时完全没有。
+const resolveProxies = async () => {
   const [proxyRes, providerRes] = await Promise.all([fetchProxiesAPI(), fetchProxyProviderAPI()])
   const proxyData = proxyRes.data
   const providerData = providerRes.data
-
-  if (fetchTime !== nowTime) {
-    return
-  }
 
   const sortIndex = proxyData.proxies[GLOBAL]?.all ?? []
   const allProviderProxies: Record<string, Proxy> = {}
@@ -91,8 +83,11 @@ const doFetchProxies = async () => {
   }
 
   const smartGroups: string[] = []
+  const ipv6Names: string[] = []
 
-  // 图标回填/IPv6/smart 收集都在合并前的新对象上完成,保证 merge 的内容比较有效
+  // 图标回填/IPv6/smart 收集都在合并前的新对象上完成,保证 merge 的内容比较有效。
+  // IPv6Map 是共享状态,它的写入属于提交阶段 —— 留在这里会让一份被判定为过期、
+  // 整份丢弃的响应仍然在 IPv6Map 上留下痕迹。
   Object.entries(next).forEach(([name, proxy]) => {
     const iconReflect = iconReflectList.value.find((icon) => icon.name === name)
 
@@ -100,7 +95,7 @@ const doFetchProxies = async () => {
       proxy.icon = iconReflect.icon
     }
     if (IPv6test.value && getIPv6FromExtra(proxy)) {
-      IPv6Map.value[name] = true
+      ipv6Names.push(name)
     }
 
     if (proxy.type.toLowerCase() === PROXY_TYPE.Smart) {
@@ -108,9 +103,7 @@ const doFetchProxies = async () => {
     }
   })
 
-  mergeProxyMap(next)
-
-  proxyGroupList.value = Object.values(proxyData.proxies)
+  const nextGroupList = Object.values(proxyData.proxies)
     .filter((proxy) => proxy.all?.length && proxy.name !== GLOBAL)
     .sort((prev, next) => {
       const prevIndex = sortIndex.indexOf(prev.name)
@@ -130,30 +123,28 @@ const doFetchProxies = async () => {
     })
     .map((proxy) => proxy.name)
 
-  proxyProviederList.value = providers
+  return () => {
+    for (const name of ipv6Names) {
+      IPv6Map.value[name] = true
+    }
+    mergeProxyMap(next)
+    proxyGroupList.value = nextGroupList
+    proxyProviederList.value = providers
 
-  if (smartGroups.length > 0) {
-    initSmartWeights(smartGroups)
+    if (smartGroups.length > 0) {
+      initSmartWeights(smartGroups)
+    }
   }
 }
 
-// in-flight 去重 + 可选新鲜度窗口:启动双拉、导航重拉、回前台重拉共用同一入口,
-// 不再并发发出多份 MB 级全量请求。
-export const fetchProxies = async (options?: { maxAge?: number }) => {
-  if (inflightFetch) {
-    return inflightFetch
-  }
-  if (options?.maxAge && Date.now() - lastFetchDoneAt < options.maxAge) {
-    return
-  }
+// in-flight 去重 + 代际守卫 + 新鲜度窗口:启动双拉、导航重拉、回前台重拉共用同一入口,
+// 不再并发发出多份 MB 级全量请求,也不会让上一个后端的响应回填到新会话里。
+const proxiesResource = createSessionResource(resolveProxies)
 
-  inflightFetch = doFetchProxies().finally(() => {
-    inflightFetch = null
-    lastFetchDoneAt = Date.now()
-  })
+export const fetchProxies = (options?: { maxAge?: number }) => proxiesResource.fetch(options)
 
-  return inflightFetch
-}
+/** 写操作(更新订阅、切换节点等)之后调用:让下一次 fetchProxies 必然真发。 */
+export const invalidateProxies = () => proxiesResource.invalidate()
 
 // 点选后只刷新该组(GET /proxies/{name},1-2KB):原实现每次点选 fire-and-forget
 // 全量重拉 /proxies + /providers/proxies(千节点 0.5~3MB),且"已选中"分支读的是
@@ -249,7 +240,12 @@ export const proxyLatencyTest = async (
   timeout = speedtestTimeout.value,
 ) => {
   const res = await latencyTestForSingle(proxyName, url, timeout)
-  await fetchProxies()
+
+  // 内核的写响应已经把延迟给了我们,不需要再花一次全量 /proxies + /providers/proxies 往返去问同一个问题。
+  // 回读除了浪费,还打开了一整类竞态:in-flight 去重会让这次回读搭上「写入之前就发出」的那份请求,
+  // 于是延迟不更新、紧接着按旧数据统计出的成功/失败数还会报出并不存在的失败。
+  // 'sync' 是因为调用方(ProxyNodeCard)在 await 返回后立刻要量卡片坐标做滚动定位。
+  setHistory(proxyName, res.status === 200 ? res.data.delay : NOT_CONNECTED, url, 'sync')
 
   if (res.status !== 200) {
     showNotification({
@@ -314,8 +310,25 @@ const flushLatencies = () => {
   }
 }
 
-const setHistory = (proxyName: string, delay: number, url: string) => {
+// flush 策略是接口的一部分,而不是隐含时序:调用方若在 await 返回后立刻要量坐标
+// (ProxyNodeCard 测速完要把卡片滚到视野中央),就必须拿到 'sync';
+// 批量测速那种一轮几十上百条的场景用默认的 'batched',避免每条结果都级联全组重算。
+const setHistory = (
+  proxyName: string,
+  delay: number,
+  url: string,
+  flush: 'sync' | 'batched' = 'batched',
+) => {
   pendingLatencies.push({ name: proxyName, url, delay })
+
+  if (flush === 'sync') {
+    if (latencyFlushTimer) {
+      clearTimeout(latencyFlushTimer)
+    }
+    flushLatencies()
+    return
+  }
+
   if (!latencyFlushTimer) {
     latencyFlushTimer = setTimeout(flushLatencies, 200)
   }
@@ -402,6 +415,7 @@ export const proxyGroupLatencyTest = async (proxyGroupName: string) => {
   }
 
   const timeout = Math.max(5000, speedtestTimeout.value)
+  let latencyResult: Record<string, number> = {}
 
   batchTestingCount.value++
   try {
@@ -422,16 +436,21 @@ export const proxyGroupLatencyTest = async (proxyGroupName: string) => {
         })
       }
     }
-    await fetchProxyGroupLatencyAPI(proxyGroupName, url, timeout)
-    await fetchProxies()
+    // 同上:/group/{n}/delay 返回的就是 Record<节点名, 延迟>,逐条本地写入即可,
+    // 既不需要全量回读,统计也直接用这份权威结果算(回读版会把「写入前发出的那份响应」当成结果,
+    // 于是明明测通了却报一堆失败)。
+    const { data } = await fetchProxyGroupLatencyAPI(proxyGroupName, url, timeout)
+
+    latencyResult = data
+    for (const name of all) {
+      setHistory(name, latencyResult[name] ?? NOT_CONNECTED, url)
+    }
   } finally {
     batchTestingCount.value--
   }
 
   const total = all.length
-  const testFailed = all.filter(
-    (name) => getLatencyByName(name, proxyGroupName) === NOT_CONNECTED,
-  ).length
+  const testFailed = all.filter((name) => !(latencyResult[name] > NOT_CONNECTED)).length
 
   showNotification({
     content: 'testFinishedResultTip',

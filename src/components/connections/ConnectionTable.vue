@@ -591,16 +591,25 @@ const columnPinning = useStorage<ColumnPinningState>('config/table-column-pinnin
   right: [],
 })
 
-// clash 的 start 是 ISO 串、sing-box 是数值时间戳;逐比较建 dayjs 太贵,数值化处理
+// clash 的 start 是 ISO 串、sing-box 是数值时间戳;逐比较建 dayjs 太贵,数值化处理。
+// 排序是 O(N log N) 次比较(2000 连接每拍约 4.4 万次),ISO 串解析不便宜,所以按连接
+// 对象记忆化:组装层每拍都产出全新对象,WeakMap 天然按拍失效、读不到过期值;而同一个
+// 对象的 start 永不变,缓存恒正确。不按 id 字符串缓存 —— 那要求每个写入点手工失效。
+const startValueCache = new WeakMap<Connection, number>()
 const connectStartValue = (connection: Connection) => {
-  const start = getConnectionStart(connection)
+  const cached = startValueCache.get(connection)
 
-  if (typeof start === 'number') {
-    return start
+  if (cached !== undefined) {
+    return cached
   }
-  const parsed = Date.parse(start)
 
-  return Number.isNaN(parsed) ? 0 : parsed
+  const start = getConnectionStart(connection)
+  const parsed = typeof start === 'number' ? start : Date.parse(start)
+  const value = Number.isNaN(parsed) ? 0 : parsed
+
+  startValueCache.set(connection, value)
+
+  return value
 }
 
 // tanstack 内部 memo 依赖 state.columnVisibility 的引用稳定性;getter 每次访问造新对象
@@ -697,11 +706,25 @@ const rows = computed(() => {
 })
 
 const parentRef = ref<HTMLElement | null>(null)
+
+// estimateSize 同时被写成 tr 的行内 height,而 tr 的 height 只是下限、内容更高就撑开:
+// 取值必须是「本表这一档最高的一行」。实测(Chrome + 本仓库 daisyUI):table-sm(尺寸=大,
+// 单元格上下 padding 共 16)下关闭列的 btn-xs 把行撑到 40,其余列最高的代理链列是 36 ——
+// 按 36 记账会让内容比滚动条快 11%、每滚过一行抖一次 4px 台阶。table-xs(尺寸=小,
+// padding 共 8)下最高也才 32,被行内 height 垫到 36,仍用 36。
+// 取最高值而不是逐行实测:「全部」tab 下已关闭的行没有关闭按钮,本来就是 36/40 混排,
+// 而 tr 的 transform 化简(start - index * size)只在所有行等高时成立,不能真开逐行测量。
+const rowEstimateSize = computed(() =>
+  tableSize.value === TABLE_SIZE.LARGE &&
+  columnVisibility.value[CONNECTIONS_TABLE_ACCESSOR_KEY.Close]
+    ? 40
+    : 36,
+)
 const rowVirtualizerOptions = computed(() => {
   return {
     count: rows.value.length,
     getScrollElement: () => parentRef.value,
-    estimateSize: () => 36,
+    estimateSize: () => rowEstimateSize.value,
     overscan: 8,
   }
 })

@@ -328,6 +328,7 @@ const zhTW: LANG_MESSAGE = {
   currentBackendUnavailable: '當前後端不可用，嘗試切換到其他後端?',
   confirm: '確定',
   backendSwitchTo: '已切換後端為{backend}',
+  noAvailableBackend: '沒有其他可用的後端',
 
   // Backend settings
   ipv6Test: 'IPv6 測試',

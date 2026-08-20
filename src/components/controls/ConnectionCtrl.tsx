@@ -1,12 +1,20 @@
 import { disconnectConnections } from '@/assembly/connections'
 import { useCtrlsBar } from '@/composables/useCtrlsBar'
-import { ROUTE_NAME, SETTINGS_MENU_KEY, SORT_DIRECTION, SORT_TYPE } from '@/constant'
+import {
+  CONNECTION_TAB_TYPE,
+  ROUTE_NAME,
+  SETTINGS_MENU_KEY,
+  SORT_DIRECTION,
+  SORT_TYPE,
+} from '@/constant'
 import { useTooltip } from '@/helper/tooltip'
 import {
+  activeConnections,
   connectionFilter,
-  connections,
   connectionSortDirection,
   connectionSortType,
+  connectionTabShow,
+  isClosedConnection,
   isPaused,
   quickFilterEnabled,
   quickFilterRegex,
@@ -36,7 +44,14 @@ import ConnectionTabs from './ConnectionTabs.vue'
 import SourceIPFilter from './SourceIPFilter.vue'
 
 const handlerClickCloseAll = () => {
-  disconnectConnections(renderConnections.value, connections.value.length)
+  // 「已关闭」的连接不能参与:一来对它们下手毫无意义,二来 disconnectConnections 用
+  // 「目标条数 == 活跃连接总数」判定能否走批量端点 DELETE /connections,一旦把已关闭条目
+  // 算进目标集,「已关闭」tab 下两个数会恰好相等,于是点这颗按钮变成断开全部活跃连接。
+  const targets = renderConnections.value.filter((conn) => !isClosedConnection(conn))
+
+  // 第二个实参的语义是「活跃连接总数」,只能用 activeConnections。connections 是随 tab
+  // 变化的列表(CLOSED 返回已关闭、ALL 返回两者拼接),拿它当总数就是上面那个错配的来源。
+  disconnectConnections(targets, activeConnections.value.length)
 }
 
 export default defineComponent({
@@ -185,8 +200,11 @@ export default defineComponent({
           >
             {isPaused.value ? <PlayIcon class="h-4 w-4" /> : <PauseIcon class="h-4 w-4" />}
           </button>
+          {/* 「已关闭」tab 下没有任何可断的目标,置灰而不是移除 —— 移除会让控制栏少一颗按钮、
+              切 tab 时整条栏重新排版。这也与单条连接在该 tab 下不给关闭按钮的既有设计一致。 */}
           <button
             class="btn btn-circle btn-sm"
+            disabled={connectionTabShow.value === CONNECTION_TAB_TYPE.CLOSED}
             onClick={handlerClickCloseAll}
           >
             <XMarkIcon class="h-4 w-4" />

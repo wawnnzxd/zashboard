@@ -63,8 +63,7 @@
 </template>
 
 <script setup lang="ts">
-import { getIPFromIpipnetAPI, getIPInfo } from '@/api/geoip'
-import { ipForChina, ipForGlobal } from '@/composables/overview'
+import { fetchPublicIP, ipForChina, ipForGlobal } from '@/composables/publicIP'
 import { useTooltip } from '@/helper/tooltip'
 import { autoIPCheck, IPInfoAPI } from '@/store/settings'
 import { BoltIcon, EyeIcon, EyeSlashIcon } from '@heroicons/vue/24/outline'
@@ -78,48 +77,8 @@ const handlerShowPrivacyTip = (e: Event) => {
   showTip(e, t('ipScreenshotTip'))
 }
 
-const QUERYING_IP_INFO = {
-  ip: [t('getting'), ''],
-  ipWithPrivacy: [t('getting'), ''],
-}
-
-const FAILED_IP_INFO = {
-  ip: [t('testFailed'), ''],
-  ipWithPrivacy: [t('testFailed'), ''],
-}
-
-const getIPs = () => {
-  ipForChina.value = {
-    ...QUERYING_IP_INFO,
-  }
-  ipForGlobal.value = {
-    ...QUERYING_IP_INFO,
-  }
-  getIPInfo()
-    .then((res) => {
-      ipForGlobal.value = {
-        ipWithPrivacy: [`${res.country} ${res.organization}`, res.ip],
-        ip: [`${res.country} ${res.organization}`, '***.***.***.***'],
-      }
-    })
-    .catch(() => {
-      ipForGlobal.value = {
-        ...FAILED_IP_INFO,
-      }
-    })
-  getIPFromIpipnetAPI()
-    .then((res) => {
-      ipForChina.value = {
-        ipWithPrivacy: [res.data.location.join(' '), res.data.ip],
-        ip: [`${res.data.location[0]} ** ** **`, '***.***.***.***'],
-      }
-    })
-    .catch(() => {
-      ipForChina.value = {
-        ...FAILED_IP_INFO,
-      }
-    })
-}
+// 取数、单飞与打码都在 composables/publicIP.ts 里 —— 这里只负责「什么时候该取」。
+const getIPs = () => fetchPublicIP({ force: true })
 
 watch(IPInfoAPI, () => {
   if ([ipForChina, ipForGlobal].some((item) => item.value.ip.length !== 0)) {
@@ -128,8 +87,9 @@ watch(IPInfoAPI, () => {
 })
 
 onMounted(() => {
-  if (autoIPCheck.value && [ipForChina, ipForGlobal].some((item) => item.value.ip.length === 0)) {
-    getIPs()
+  // 不带 force:地球仪可能已经取过了,这里直接复用,不再重复请求同一个接口
+  if (autoIPCheck.value) {
+    fetchPublicIP()
   }
 })
 </script>

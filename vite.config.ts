@@ -46,20 +46,65 @@ export default defineConfig({
       workbox: {
         // The globe is lazy-loaded, but its local textures and bundled attribution must
         // remain available after the first PWA install/update for offline cache reuse.
-        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2,webp,jpg,md}'],
+        // 不含 woff2:FONT=all 打进 282 个 unicode-range 子集(7.5MB),而运行时只可能
+        // 命中一个家族的十几个子集 + 一个 emoji 字体,precache 却是无条件全量下载。
+        // 字体改走下面的 CacheFirst 运行时缓存 —— 用到哪个存哪个,离线完整度只差
+        // 「从未在线加载过的字重」。(在 globPatterns 里不列,比在 globIgnores 里
+        // 反选更干净:globIgnores 保持「排除懒加载 chunk」这一单一语义。)
+        // 也不含 md:只有 public/THIRD_PARTY_NOTICES.md,离线预取它没有意义。
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,webp,jpg}'],
         // The bundle is above Workbox's 2 MiB default because sing-box native
         // API support and the Tools page are always bundled.
         maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
         // Tools 页与 xterm 多数用户从不打开,不进 precache(首装省 ~400KB),
-        // 首次访问时走运行时缓存
-        globIgnores: ['**/xterm-*.js', '**/ToolsPage-*.js'],
+        // 首次访问时走运行时缓存;
+        // background.jpg 同理 —— 它只在 earthVisualMode === 'space' 时才被采样,
+        // 而默认是 'flat',默认配置下这 220KB 100% 用不到(其余三张贴图保留,
+        // 扁平模式就要用)。
+        globIgnores: ['**/xterm-*.js', '**/ToolsPage-*.js', '**/background-*.jpg'],
         runtimeCaching: [
           {
             urlPattern: /assets\/(xterm|ToolsPage)-[^/]*\.js$/,
             handler: 'CacheFirst',
             options: {
               cacheName: 'lazy-tools',
-              expiration: { maxEntries: 8 },
+              // 文件名带内容 hash,新版本必然是新 URL,旧条目再也不会被命中;
+              // 而 cleanupOutdatedCaches() 只清 workbox precache,不碰这里。
+              // 留 4 个条目(约两版 xterm+ToolsPage)既能挤掉陈旧版本,又给
+              // 「某次分包多产出一个同名 chunk」留余量,不至于自己淘汰自己。
+              expiration: {
+                maxEntries: 4,
+                maxAgeSeconds: 60 * 60 * 24 * 30,
+                purgeOnQuotaError: true,
+              },
+            },
+          },
+          {
+            // 星空背景不进 precache,但切到 space 模式后要能离线复用:globeLayer 是
+            // Promise.all 一起等四张贴图的,缺一张整个地球仪就起不来。
+            urlPattern: /assets\/background-[^/]*\.jpg$/,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'earth-textures',
+              expiration: {
+                maxEntries: 4,
+                maxAgeSeconds: 60 * 60 * 24 * 365,
+                purgeOnQuotaError: true,
+              },
+            },
+          },
+          {
+            // 字体不再 precache,改为用到才存。不设 maxEntries:单个家族就有近百个
+            // unicode-range 子集,设小了会 LRU 反复淘汰-重下(在线白费流量、离线直接掉字体);
+            // URL 带内容 hash 不会变质,用 maxAge + 配额兜底即可。
+            urlPattern: /assets\/[^/]+\.woff2?$/,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'fonts',
+              expiration: {
+                maxAgeSeconds: 60 * 60 * 24 * 365,
+                purgeOnQuotaError: true,
+              },
             },
           },
         ],
@@ -111,6 +156,16 @@ export default defineConfig({
           if (id.includes('/three/') || id.includes('/three@')) return 'three'
           if (id.includes('vue-i18n') || id.includes('@intlify')) return 'i18n'
           if (id.includes('@bufbuild') || id.includes('@connectrpc')) return 'grpc'
+          // vuedraggable 是 CJS,它的 require('vue') 走 node 的 require 条件,解析到
+          // vue 完整版(vue/index.js → dist/vue.cjs.prod.js),而完整版无条件带上
+          // @vue/compiler-dom。全 app 没有任何运行时模板编译,这份编译器却被下面的
+          // vue-stack 规则钉成 entry 的静态依赖,等于每次冷启动都 modulepreload
+          // 约 82KB min 的死代码。单独成 chunk 后它只被 vuedraggable 引用,随后者
+          // 一起退到懒加载路径。注意 vue 完整版必须和编译器同组:只挪编译器的话,
+          // 留在 vue-stack 里的 vue.cjs.prod.js 仍会静态 import 它,preload 照旧。
+          if (/node_modules\/(@vue\/compiler-|vue\/(index\.js|dist\/vue\.cjs))/.test(id)) {
+            return 'vue-compiler'
+          }
           if (
             id.includes('/@vue/') ||
             id.includes('/vue/') ||

@@ -6,7 +6,7 @@
     :data="renderRulesProvider"
     :columns="providerColumns"
     sorting-key="config/rule-providers-table-sorting"
-    :estimate-size="36"
+    :estimate-size="providerRowEstimateSize"
   />
   <VirtualTable
     v-else
@@ -15,7 +15,7 @@
     :columns="ruleColumns"
     :column-visibility="ruleColumnVisibility"
     sorting-key="config/rules-table-sorting"
-    :estimate-size="36"
+    :estimate-size="rulesRowEstimateSize"
     :row-class="ruleRowClass"
     @row-click="handlerRuleClick"
   />
@@ -66,9 +66,9 @@ import {
   isUpdateableRuleSet,
   toggleRuleDisabledWithSideEffects,
 } from '@/composables/rules'
-import { RULE_TAB_TYPE } from '@/constant'
+import { RULE_TAB_TYPE, TABLE_SIZE } from '@/constant'
 import { fromNow } from '@/helper/utils'
-import { displayLatencyInRule, displayNowNodeInRule } from '@/store/settings'
+import { displayLatencyInRule, displayNowNodeInRule, tableSize } from '@/store/settings'
 import type { Rule, RuleProvider } from '@/types'
 import { ArrowPathIcon } from '@heroicons/vue/24/outline'
 import type { ColumnDef } from '@tanstack/vue-table'
@@ -77,6 +77,16 @@ import { computed, h, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 const { t } = useI18n()
+
+// 传给 VirtualTable 的行高必须 >= 本表最高的一行(见该组件 estimateSize 的说明)。
+// 下面的数字是拿本仓库的 daisyUI 和这两张表真实的单元格 DOM 在 Chrome 里量出来的,
+// 不是估的:table-sm(尺寸=大,单元格上下 padding 共 16)下,规则表每一行都有策略组列的
+// ProxyChainPath(内容 28px)→ 44;规则集表最高的是操作列的 btn-xs(24px)→ 40。
+// 原本两张表都写 36,规则表每滚过一行就错 8px(内容比滚动条快 22%)。
+// table-xs(尺寸=小,padding 共 8)下两者分别是 36 / 32,都不超过行内 height 垫出来的 36,
+// 统一用 36 —— 两档都写死高值只会白白拉高紧凑档的行距。
+const rulesRowEstimateSize = computed(() => (tableSize.value === TABLE_SIZE.LARGE ? 44 : 36))
+const providerRowEstimateSize = computed(() => (tableSize.value === TABLE_SIZE.LARGE ? 40 : 36))
 
 // 规则序号按配置顺序算一次,免得每行都去 rules 里 indexOf
 const ruleIndexMap = computed(() => {

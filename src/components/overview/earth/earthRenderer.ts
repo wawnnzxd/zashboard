@@ -157,13 +157,16 @@ export const createEarthRenderer = async (
     const animate = () => {
       if (disposed) return
 
-      const elapsed = clock.getDelta()
-      const delta = Math.min(0.05, elapsed)
+      // 长停顿(GC、大表重排、后台标签页恢复的第一帧)后 clock.getDelta() 可能是 0.3~2s。
+      // 所有随时间推进的状态必须吃同一个钳制值,否则彼此脱节:此前流光吃的是未钳制的原始
+      // 值,一帧就被推到轨迹终点并钳死 → 整批流光凭空消失。这里干脆不再保留未钳制的绑定,
+      // 让「谁该用哪个 delta」不再有第二个选项
+      const delta = Math.min(0.05, clock.getDelta())
       if (autoRotation) earthGroup.rotation.y += delta * 0.025
       endpointLayer.update(delta)
       if (visualMode === 'space') globeLayer.syncSunLight()
       const cameraMoved = controls.update(delta)
-      const flowsActive = routeLayer.update(elapsed)
+      const flowsActive = routeLayer.update(delta)
 
       if (
         renderRequested ||
@@ -185,7 +188,7 @@ export const createEarthRenderer = async (
 
       if (!visible || !intersecting) return
 
-      if (visualMode === 'space') updateSunForTime()
+      updateSunForTime()
 
       renderRequested = true
       if (reducedMotion) {
@@ -258,8 +261,12 @@ export const createEarthRenderer = async (
     document.addEventListener('visibilitychange', onVisibilityChange)
     registerCleanup(() => document.removeEventListener('visibilitychange', onVisibilityChange))
 
+    // sunDirection 无条件保持新鲜(不再只在 space 模式下刷新)。之前只有太空模式才刷新,
+    // 于是「flat 待了一小时再切到 space」时晨昏线停在一小时前的经度 —— 而 setVisualMode 里
+    // 补一行只能堵住这一个切换点。让不变量变成「任何时刻 sunDirection 都不超过 60 秒陈旧」,
+    // 调用者不必再记得在模式切换处补刷;代价是 flat 下每分钟一次纯计算(flat 材质不读它)
     const sunTimer = window.setInterval(() => {
-      if (visualMode === 'space') updateSunForTime()
+      updateSunForTime()
       requestRender()
     }, 60_000)
     registerCleanup(() => window.clearInterval(sunTimer))

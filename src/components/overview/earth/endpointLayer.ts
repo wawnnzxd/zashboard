@@ -138,13 +138,20 @@ export const createEndpointLayer = (options: EndpointLayerOptions): EndpointLaye
       endpointGlowMesh.dispose()
     }
 
-    capacity = Math.max(64, capacity * 2, needed)
+    // 用 needed * 2 而不是 needed:一次性大跳(GeoIP 就绪那一拍 0 → 80)时若容量恰好等于
+    // 当前需要,下一秒多出一个城市就要再重建一对 InstancedMesh(重编着色器 + 重建实例缓冲),
+    // 摊还保证当场失效。留一倍余量,增长才真是对数次重建
+    capacity = Math.max(64, capacity * 2, needed * 2)
     endpointMesh = new THREE.InstancedMesh(
       endpointGeometry,
       visualMode === 'flat' ? flatEndpointMaterial : endpointMaterial,
       capacity,
     )
     endpointGlowMesh = new THREE.InstancedMesh(endpointGlowGeometry, endpointGlowMaterial, capacity)
+    // capacity ≤ 1024 时(capacity*16*4 不超过 64KB uniform 上限)实例矩阵走的是 WebGPU 的
+    // uniform 数组路径,上传无条件发生 —— 这两行 setUsage 与后面的 needsUpdate 都不参与
+    // 上传决策。别据此以为「可以删」(超过 1024 会切回 attribute 路径,那时它们才生效),
+    // 也别据此以为「靠 needsUpdate 能省一次上传」
     endpointMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage)
     endpointGlowMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage)
     // Draw the beads above the arcs and the halos last, so the additive glow

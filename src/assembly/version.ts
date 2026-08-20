@@ -100,6 +100,11 @@ const probeBackend = async (backend: Backend) => {
 
   isCoreUpdateAvailable.value = await fetchBackendUpdateAvailableAPI()
 
+  // 上面这次「有没有新版本」的判断要走一趟 GitHub,GFW 下十几秒也可能。
+  // 期间用户切了后端的话,结论属于上一个后端,却会把 POST /upgrade 打在新后端上 ——
+  // 代价是把一个本来好好的内核重启掉,所以升级前必须再复核一次身份。
+  if (activeBackend.value?.uuid !== backend.uuid) return
+
   if (isCoreUpdateAvailable.value && autoUpgradeCore.value) {
     upgradeCoreAPI('auto')
   }

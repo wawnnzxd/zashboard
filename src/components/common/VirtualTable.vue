@@ -110,7 +110,7 @@ import {
 } from '@tanstack/vue-table'
 import { useVirtualizer } from '@tanstack/vue-virtual'
 import { useStorage } from '@vueuse/core'
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 const props = withDefaults(
@@ -119,6 +119,12 @@ const props = withDefaults(
     columns: ColumnDef<T>[]
     // 排序状态落盘的 key,同一个表格换页面回来还在
     sortingKey: string
+    // 行高:既喂给虚拟器记账,也直接写成 tr 的行内 height。tr 的 height 只是下限,
+    // 内容更高就撑开 —— 所以这个值必须 >= 本表最高的一行(单元格 padding + 最高内容),
+    // 否则虚拟器按低值记账,内容滚得比滚动条快、每滚过一行错一次台阶。
+    // 实测参考:table-sm(尺寸=大)单元格上下 padding 共 16,纯文本内容 20 → 36;
+    // 含 btn-xs(24)→ 40;含 ProxyChainPath(28)→ 44。
+    // table-xs(尺寸=小)padding 共 8,以上三种都不超过行内 height 垫的 36,统一 36 即可。
     estimateSize?: number
     overscan?: number
     columnVisibility?: VisibilityState
@@ -145,6 +151,28 @@ const emits = defineEmits<{
 const { t } = useI18n()
 
 const sorting = useStorage<SortingState>(props.sortingKey, [])
+
+// 排序状态按列 id 落盘,而列可能被 columnVisibility 隐藏(内核不提供 hitCount 时就会)。
+// 隐藏列上的排序照样生效,可表头没有箭头 —— 用户既看不出来也点不掉。把「排序只作用于
+// 可见列」这个不变量吃进实现,调用方不必记得清理。写 sorting.value 而不是在 state getter
+// 里过滤:getter 过滤会让 onSortingChange 的 updater 收到未过滤值,两边状态对不上。
+// 只在已经有数据时判 —— 首屏 rules 还没拉回来时 hasRuleExtra 恒为 false,那会儿清理会把
+// 用户在支持该字段的内核上设的排序偏好误删。
+watch(
+  () => (props.data.length > 0 ? props.columnVisibility : undefined),
+  (visibility) => {
+    if (!visibility) {
+      return
+    }
+
+    const visibleSorting = sorting.value.filter((item) => visibility[item.id] !== false)
+
+    if (visibleSorting.length !== sorting.value.length) {
+      sorting.value = visibleSorting
+    }
+  },
+  { immediate: true },
+)
 
 const tanstackTable = useVueTable({
   get data() {

@@ -40,9 +40,10 @@ export const createCityLabelLayer = (options: CityLabelLayerOptions): CityLabelL
   earthGroup.add(labelGroup)
 
   const labels = new Map<string, CSS2DObject>()
-  // 标签尺寸只随文本变化:每帧对每个标签 getBoundingClientRect 会在 CSS2DRenderer
-  // 刚改完 transform 后强制同步布局,这里按文本量一次后缓存
-  const labelSizes = new Map<CSS2DObject, { text: string; width: number; height: number }>()
+  // 标签尺寸只随文本变化,而文本只在 syncLabels 里写 —— 失效就放在那唯一的写点上,
+  // 读侧因此不必每帧重新 trim 城市名再比一次字符串。measured 记的是「这条尺寸是真量到的
+  // 还是估算的」:CSS2DRenderer 给不可见标签写 display:none,那时 gBCR 恒为 0×0
+  const labelSizes = new Map<CSS2DObject, { width: number; height: number; measured: boolean }>()
   let endpoints: readonly EarthRenderEndpoint[] = []
   let disposed = false
   const cameraWorldPosition = new THREE.Vector3()
@@ -86,7 +87,10 @@ export const createCityLabelLayer = (options: CityLabelLayerOptions): CityLabelL
         labelGroup.add(label)
       }
 
-      if (label.element.textContent !== city) label.element.textContent = city
+      if (label.element.textContent !== city) {
+        label.element.textContent = city
+        labelSizes.delete(label)
+      }
       label.position.copy(endpoint.position)
     }
 
@@ -98,19 +102,25 @@ export const createCityLabelLayer = (options: CityLabelLayerOptions): CityLabelL
     }
   }
 
-  const measureLabel = (label: CSS2DObject, text: string) => {
+  const measureLabel = (label: CSS2DObject) => {
     const cached = labelSizes.get(label)
+    // 只读内联 style 属性和 isConnected,都不触发布局。上一帧被预算/碰撞挡下的标签这时
+    // 是 display:none,量到的只会是 0×0 —— 旧代码因此拒绝缓存,于是这批标签每帧都要
+    // getBoundingClientRect,其中第一个还会在 labelRenderer 上一帧刚写完 transform/display
+    // 之后强制一次全文档样式重算 + 布局。把「这次量不到」也记下来,稳态下 gBCR 归零;
+    // 标签一旦真被显示,下一帧就用真实宽度覆盖估算值
+    const displayed = label.element.isConnected && label.element.style.display !== 'none'
 
-    if (cached && cached.text === text && cached.width > 0) return cached
+    if (cached && (cached.measured || !displayed)) return cached
 
-    const bounds = label.element.getBoundingClientRect()
+    const bounds = displayed ? label.element.getBoundingClientRect() : null
     const size = {
-      text,
-      width: bounds.width || fallbackLabelWidth(text),
-      height: bounds.height || CITY_LABEL_FALLBACK_HEIGHT,
+      width: bounds?.width || fallbackLabelWidth(label.element.textContent ?? ''),
+      height: bounds?.height || CITY_LABEL_FALLBACK_HEIGHT,
+      measured: (bounds?.width ?? 0) > 0,
     }
-    // 元素尚未布局(display:none)时量到 0,先用估算值,不缓存,下一帧再量
-    if (bounds.width > 0) labelSizes.set(label, size)
+
+    labelSizes.set(label, size)
     return size
   }
 
@@ -155,7 +165,7 @@ export const createCityLabelLayer = (options: CityLabelLayerOptions): CityLabelL
 
       const x = (projectedLabelPosition.x * 0.5 + 0.5) * width
       const y = (-projectedLabelPosition.y * 0.5 + 0.5) * height
-      const { width: labelWidth, height: labelHeight } = measureLabel(label, endpoint.city.trim())
+      const { width: labelWidth, height: labelHeight } = measureLabel(label)
 
       candidates.push({
         endpoint,

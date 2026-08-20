@@ -2,89 +2,87 @@ import { i18n } from '@/i18n'
 import { type Ref } from 'vue'
 
 const t = i18n.global.t
-const alertMap = new Map<
-  string,
-  {
-    timer: number
-    alert: HTMLElement
-    progressBar: HTMLElement
-    startTime: number
-    remainingTime: number
-    isPaused: boolean
-  }
->()
+
+// 一条 toast 的全部时间轴由 animation 这一个对象承载:进度条视觉、剩余时间、暂停态、
+// 到期回调本来就是同一件事,原先用 timer/startTime/remainingTime/isPaused 四个字段
+// 分别记账,任何一处错位都会表现成「进度条不重启 / 定格空条 / hover 保活失效 /
+// 常驻 toast 被 hover 后杀掉」。animation 为 null 表示常驻(timeout 0),
+// 于是所有暂停/续播都天然 no-op,不需要再为常驻条目写特判。
+// hovered 是唯一还需要自己记的事实 —— 指针在不在这条 toast 上,只有 DOM 事件知道。
+type Toast = {
+  key: string
+  alert: HTMLElement
+  progressBar: HTMLElement
+  animation: Animation | null
+  hovered: boolean
+}
+
+const alertMap = new Map<string, Toast>()
 let toastRef: Ref<HTMLElement> | null = null
 
 export const initNotification = (toast: Ref<HTMLElement>) => {
   toastRef = toast
 }
 
-const pauseTimer = (alertKey: string) => {
-  const alertData = alertMap.get(alertKey)
-  if (alertData && !alertData.isPaused) {
-    clearTimeout(alertData.timer)
-    alertData.isPaused = true
-    alertData.remainingTime = alertData.remainingTime - (Date.now() - alertData.startTime)
-    alertData.progressBar.style.animationPlayState = 'paused'
+const closeAlert = (toast: Toast) => {
+  toast.animation?.cancel()
+  // 置空 + 按身份删表:关闭后可能还有一个已入队、来不及取消的 finish 事件,
+  // 也可能同 key 的下一条 toast 已经建好了,两道判定保证它谁都误伤不到。
+  toast.animation = null
+  if (alertMap.get(toast.key) === toast) {
+    alertMap.delete(toast.key)
   }
+  toast.alert.remove()
 }
 
-const resumeTimer = (alertKey: string) => {
-  const alertData = alertMap.get(alertKey)
-  if (alertData && alertData.isPaused) {
-    alertData.isPaused = false
-    alertData.startTime = Date.now()
-    alertData.timer = setTimeout(() => {
-      alertMap.delete(alertKey)
-      alertData.alert.remove()
-    }, alertData.remainingTime)
-    alertData.progressBar.style.animationPlayState = 'running'
+// 重新开始这条 toast 的时间轴。同 key 复用时也走这里:旧动画 cancel 掉、建一条新的,
+// 于是「同一个元素 + 同一段 CSS 动画声明不会重启」(CSS Animations 规范)这个坑不存在。
+// 时长 / 缓动 / keyframes 与原 CSS 动画完全一致:linear,width 100% → 0%,duration = timeout。
+const restartProgress = (toast: Toast, timeout: number) => {
+  toast.animation?.cancel()
+  // 上一轮动画是 forwards,会把计算值定格在 width:0% 盖住初始 inline 宽度;
+  // 常驻分支(timeout 0)同样要复位,否则批量测速的进度 toast 全程是条空条。
+  toast.progressBar.style.width = '100%'
+
+  if (timeout === 0) {
+    toast.animation = null
+    return
   }
-}
 
-const setTimer = (
-  alert: HTMLElement,
-  timeout: number,
-  alertKey?: string,
-  progressBar?: HTMLElement | null,
-) => {
-  let timer = -1
+  const animation = toast.progressBar.animate([{ width: '100%' }, { width: '0%' }], {
+    duration: timeout,
+    easing: 'linear',
+    fill: 'forwards',
+  })
 
-  if (timeout !== 0) {
-    // 设置进度条动画
-    if (progressBar) {
-      progressBar.style.animation = `progressBar ${timeout}ms linear forwards`
+  animation.addEventListener('finish', () => {
+    // 期间若被同 key 更新换成了新动画,这条到期通知已经不作数。
+    if (toast.animation === animation) {
+      closeAlert(toast)
     }
+  })
 
-    timer = setTimeout(() => {
-      if (alertKey) {
-        alertMap.delete(alertKey)
-      }
-      alert.remove()
-    }, timeout)
+  // 指针已经压在这条 toast 上时,新时间轴直接以暂停态开始,hover 保活不会被更新冲掉。
+  if (toast.hovered) {
+    animation.pause()
   }
 
-  if (alertKey && progressBar) {
-    alertMap.set(alertKey, {
-      alert,
-      timer,
-      progressBar,
-      startTime: Date.now(),
-      remainingTime: timeout,
-      isPaused: false,
-    })
-  }
+  toast.animation = animation
 }
 
-const closeAlert = (alert: HTMLElement, alertKey?: string) => {
-  if (alertKey) {
-    const alertData = alertMap.get(alertKey)
-    if (alertData) {
-      clearTimeout(alertData.timer)
-      alertMap.delete(alertKey)
-    }
+const setHovered = (alertKey: string, hovered: boolean) => {
+  const toast = alertMap.get(alertKey)
+
+  if (!toast) return
+
+  toast.hovered = hovered
+
+  if (hovered) {
+    toast.animation?.pause()
+  } else if (toast.animation?.playState === 'paused') {
+    // 只续播确实被自己暂停过的动画:对已经跑完的动画调 play() 会把它倒回起点重播。
+    toast.animation.play()
   }
-  alert.remove()
 }
 
 const setAlert = (
@@ -93,7 +91,7 @@ const setAlert = (
   params: Record<string, string>,
   type: string,
   alertKey: string,
-): HTMLElement | null => {
+): HTMLElement => {
   alert.className = `alert flex p-2 pr-5 relative ${type}`
 
   const contentDiv = document.createElement('div')
@@ -107,7 +105,15 @@ const setAlert = (
       <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
     </svg>
   `
-  closeButton.addEventListener('click', () => closeAlert(alert, alertKey))
+  closeButton.addEventListener('click', () => {
+    const toast = alertMap.get(alertKey)
+
+    if (toast) {
+      closeAlert(toast)
+    } else {
+      alert.remove()
+    }
+  })
 
   const progressContainer = document.createElement('div')
   progressContainer.className =
@@ -124,8 +130,8 @@ const setAlert = (
   alert.appendChild(closeButton)
   alert.appendChild(progressContainer)
 
-  alert.addEventListener('mouseenter', () => pauseTimer(alertKey))
-  alert.addEventListener('mouseleave', () => resumeTimer(alertKey))
+  alert.addEventListener('mouseenter', () => setHovered(alertKey, true))
+  alert.addEventListener('mouseleave', () => setHovered(alertKey, false))
 
   return progressBar
 }
@@ -160,19 +166,20 @@ export const showNotification = ({
   timeout?: number
 }) => {
   const alertKey = key || content
+  const existing = alertMap.get(alertKey)
 
-  if (alertKey && alertMap.has(alertKey)) {
-    const entry = alertMap.get(alertKey)!
-
-    clearTimeout(entry.timer)
-    updateAlert(entry.alert, content, params, type)
-    setTimer(entry.alert, timeout, alertKey, entry.progressBar)
+  if (existing) {
+    updateAlert(existing.alert, content, params, type)
+    restartProgress(existing, timeout)
     return
   }
 
   const alert = document.createElement('div')
-
   const progressBar = setAlert(alert, content, params, type, alertKey)
+  const toast: Toast = { key: alertKey, alert, progressBar, animation: null, hovered: false }
+
+  // 先入表再起动画:finish 回调与 hover 回调都要能按 key 找到这条 toast。
+  alertMap.set(alertKey, toast)
   toastRef?.value?.insertBefore(alert, toastRef?.value?.firstChild)
-  setTimer(alert, timeout, alertKey, progressBar)
+  restartProgress(toast, timeout)
 }

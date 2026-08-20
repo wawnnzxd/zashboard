@@ -1,6 +1,6 @@
 // 规则行为共用逻辑,卡片视图与表格视图都走这里,避免两套实现跑偏。
 import { disconnectConnections } from '@/assembly/connections'
-import { fetchRules, ruleProviderList, toggleRuleDisabled } from '@/assembly/rules'
+import { ruleProviderList, setRuleDisabled, toggleRuleDisabled } from '@/assembly/rules'
 import { getConnectionRulePayload } from '@/helper'
 import { activeConnections } from '@/store/connections'
 import { disconnectOnRuleDisable } from '@/store/settings'
@@ -47,6 +47,8 @@ export const toggleRuleDisabledWithSideEffects = async (rule: Rule) => {
   const willBeDisabled = !isRuleDisabled(rule)
 
   await toggleRuleDisabled(rule, willBeDisabled)
+  // 写成功即状态确定,就地更新;不再重拉数千条规则去问服务器同一个问题
+  setRuleDisabled(rule, willBeDisabled)
 
   if (willBeDisabled && disconnectOnRuleDisable.value) {
     const matchingConnections = activeConnections.value.filter((conn) => {
@@ -58,6 +60,4 @@ export const toggleRuleDisabledWithSideEffects = async (rule: Rule) => {
 
     await disconnectConnections(matchingConnections, activeConnections.value.length)
   }
-
-  await fetchRules()
 }

@@ -95,12 +95,20 @@ export const syncSettingsFromCore = async ({
     return false
   }
 
+  // 短路保留:confirm 为 false 时不必扫一遍 localStorage
+  const overridden = confirm ? getOverriddenSettingKeys(data) : []
+
   // 记录 hash 避免对相同内容重复提示;用户拒绝(或无 key 变动)时保留本地设置
-  if (
-    confirm &&
-    !(await confirmSettingsOverride(getOverriddenSettingKeys(data), 'syncSettingsConfirm'))
-  ) {
+  if (confirm && !(await confirmSettingsOverride(overridden, 'syncSettingsConfirm'))) {
     autoSyncSettingsHash.value = newHash
+    // 无 key 需要覆盖时 confirmSettingsOverride 压根没弹窗就返回 false,手动点「同步设置」
+    // 若在此静默返回,用户看到的是按钮毫无反应 —— 这种情况其实就是「已经是最新的」
+    if (notify && overridden.length === 0) {
+      showNotification({
+        content: 'syncSettingsSuccess',
+        type: 'alert-success',
+      })
+    }
     return false
   }
 
@@ -134,14 +142,27 @@ export const importSettingsFromUrl = async ({
   force?: boolean
   confirm?: boolean
 } = {}) => {
-  const res = await fetch(importSettingsUrl.value)
+  const url = importSettingsUrl.value
   const errorHandler = () => {
     showNotification({
       content: 'importFailed',
-      params: { url: res.url },
+      params: { url },
       type: 'alert-error',
     })
   }
+
+  // 网络层失败(离线 / DNS / CORS)和 404、坏 JSON 是同一类失败，一起吃进实现:
+  // 调用方只看返回值即可，不必各自记得包 try —— 漏包一次就会把调用点后面的流程
+  // (App.vue 的自动同步)连坐吞掉。注意 errorHandler 不能再用 res.url，此处 res 不存在
+  let res: Response
+  try {
+    res = await fetch(url)
+  } catch (error) {
+    console.error('Failed to fetch settings from URL:', error)
+    errorHandler()
+    return false
+  }
+
   if (!res.ok) {
     errorHandler()
     return false

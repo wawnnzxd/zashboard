@@ -60,13 +60,42 @@ export const groupProxiesByProviderName = (proxies: string[]): ProxiesProviderSe
   }))
 }
 
-export function useRenderProxyList(proxies: ComputedRef<string[]>, groupName?: string) {
-  const renderProxies = computed(() => getRenderProxies(proxies.value, groupName))
+const isSameList = (prev: string[], next: string[]) =>
+  prev.length === next.length && prev.every((name, index) => name === next[index])
 
+export function useRenderProxyList(proxies: ComputedRef<string[]>, groupName?: string) {
+  // 卡片挂在 <TransitionGroup> 下,而 shouldUpdateComponent 的第一条实质判断就是
+  // `if (nextVNode.dirs || nextVNode.transition) return true`(排在 patchFlag 之前),
+  // 所以只要这个数组换引用,视野内每张卡片都会完整重渲染 —— props 再稳也拦不住。
+  // 排序/过滤路径每次都 filter/concat/sort 出新数组,测速潮里每 200ms 换一次 proxyMap,
+  // 结果却逐字相同。逐项 O(N) 比较远比一次全组重渲染便宜:内容没变就复用旧引用,
+  // 上游 computed 的 hasChanged 直接短路,下游一个都不会被触发。
+  // 内容真变了(按延迟排序顺序变化)照常产出新数组,FLIP 过渡不受影响。
+  let prevList: string[] = []
+  const result = computed(() => {
+    const { list, latencyMap } = getRenderProxies(proxies.value, groupName)
+
+    if (!isSameList(prevList, list)) {
+      prevList = list
+    }
+
+    return { list: prevList, latencyMap }
+  })
+
+  const renderProxies = computed(() => result.value.list)
+
+  // 延迟在 getRenderProxies 里已经按整组算过一遍(每个 name 都要沿 now 链走 map),
+  // 复用同一份 latencyMap,不再为了数个数把整条链路重走一次。
   const proxiesCount = computed(() => {
-    const available = renderProxies.value.filter(
-      (proxy) => getLatencyByName(proxy, groupName) !== NOT_CONNECTED,
-    ).length
+    const { list, latencyMap } = result.value
+    let available = 0
+
+    for (const name of list) {
+      if (latencyMap.get(name) !== NOT_CONNECTED) {
+        available++
+      }
+    }
+
     return `${available}/${proxies.value.length}`
   })
 
@@ -78,7 +107,8 @@ const getRenderProxies = (proxies: string[], groupName: string | undefined) => {
     proxies.map((name) => [name, getLatencyByName(name, groupName)]),
   )
   const filtered = filterProxies(proxies, groupName, latencyMap)
-  return sortProxies(filtered, groupName, latencyMap)
+
+  return { list: sortProxies(filtered, groupName, latencyMap), latencyMap }
 }
 
 const filterProxies = (

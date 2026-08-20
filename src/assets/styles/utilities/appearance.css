@@ -81,7 +81,15 @@
 
 .custom-blur {
   /* 注意:不要把 .btn 加进模糊清单 —— 每个按钮独立成模糊合成层(连接页一屏上百个),
-     且按钮叠在已整面模糊的容器上,按元素模糊视觉上纯冗余、GPU 每帧数 ms 白烧 */
+     且 95% 的按钮本来就叠在已整面模糊的容器上(sidebar / card / collapse / modal-box /
+     settings-grid / base-container / dock / need-blur),按元素再模糊一次视觉上纯冗余、
+     GPU 每帧数 ms 白烧。
+     这是一个有意的取舍,不是漏改,别再当 bug 反复审计:祖先链上确实没有任何模糊容器的
+     少数按钮(SettingsCategoryHeader 编辑模式的上移/下移圆钮、SettingsPage 的 PWA 刷新钮、
+     SettingsPage 编辑模式工具条、SetupPage、App.vue 的 needRefresh 钮)会直接压在背景图上,
+     比上游少一层磨砂 —— 用这几处的观感换掉上百个合成层,划算。
+     将来若确实想要那几处磨砂:给那几个容器加 need-blur(已在下面的清单里),
+     而不是给 .btn 全局加回 backdrop-filter。 */
   .card,
   .collapse,
   .sidebar,
@@ -94,10 +102,14 @@
     backdrop-filter: blur(var(--blur-px, 0px));
   }
 
-  .pinned-td {
-    /* 逐行独立模糊层同理太贵,半透实色即可保证 pin 列可读性 */
-    background-color: color-mix(in srgb, var(--color-base-100) 88%, transparent) !important;
-  }
+  /* 这里刻意不给 .pinned-td 写任何 background —— 别再补回来。
+     固定列的 th/td 自带 bg-inherit,background-color: inherit 直接取 tr 的计算值:
+     斑马纹、hover 变色、透明度滑块三件事全部自动跟随,一条规则都不用写。
+     写死一个百分比会同时废掉这三样 —— 2026-07-17 曾写死 88% 实色,结果是固定列丢斑马纹、
+     不跟随透明度滑块、sticky 表头上多一条接缝,而 hover 时底色不动、继承下来的
+     text-primary-content 却变了色 → 亮色主题下近白文字压在 base-100 底上,是可读性 bug。
+     当初「逐行独立模糊层太贵」的性能理由也不成立:固定列已随 inheritedStyle 带
+     backdrop-blur-sm 自建合成层,不写背景不会新增任何层。 */
 
   .table tbody::before {
     position: absolute;

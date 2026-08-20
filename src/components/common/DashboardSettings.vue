@@ -265,17 +265,50 @@ const handlerClickResetSettings = () => {
 }
 
 const handlerJsonUpload = () => {
+  const file = inputRef.value?.files?.[0]
+  // 取消选择时不该弹「正在导入」，所以提示放在拿到文件之后
+  if (!file) return
+
+  const failed = (reason: unknown) => {
+    console.error('Failed to import settings from file:', reason)
+    showNotification({
+      content: 'importFailed',
+      params: { url: file.name },
+      type: 'alert-error',
+    })
+    // 不清空的话，失败后再选同一个文件不会触发 change 事件，用户看到的是「重试也没反应」
+    if (inputRef.value) inputRef.value.value = ''
+  }
+
   showNotification({
     content: 'importing',
   })
-  const file = inputRef.value?.files?.[0]
-  if (!file) return
+
   const reader = new FileReader()
-  reader.onload = async () => {
-    const settings = JSON.parse(reader.result as string)
-    applyDashboardSettingsToStorage(settings)
+
+  // FileReader 是原生 DOM 回调，抛出的错误不经 Vue 的错误兜底，不自己接住就是一条静默失败
+  reader.onload = () => {
+    let settings: unknown
+
+    try {
+      settings = JSON.parse(reader.result as string)
+    } catch (error) {
+      failed(error)
+      return
+    }
+
+    // 合法 JSON ≠ 合法设置：null / 数组 / 误选的内核配置都会「导入成功」却一个键都没写
+    if (!settings || typeof settings !== 'object' || Array.isArray(settings)) {
+      failed(new Error(`unexpected settings shape in ${file.name}`))
+      return
+    }
+
+    applyDashboardSettingsToStorage(settings as Record<string, unknown>)
+    // 成功路径紧接 reload，input 随页面一起丢弃，无需清空
     location.reload()
   }
+  reader.onerror = () => failed(reader.error)
+
   reader.readAsText(file)
 }
 

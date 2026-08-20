@@ -24,6 +24,23 @@ export const proxyProviederList = shallowRef<ProxyProvider[]>([])
 export const batchTestingCount = ref(0)
 export const isBatchLatencyTesting = computed(() => batchTestingCount.value > 0)
 
+// 判等用的序列化结果按「对象身份」缓存,不按 name:所有写路径(setProxyNode /
+// setProxyNodeFields / flushLatencies / refreshSingleProxy)都是 `{ ...node }` 造新对象,
+// 新对象天然 miss、旧对象随 GC 一起带走缓存项 —— 缓存自失效,没有任何写入点需要「记得」invalidate。
+// 按 name 缓存则要求每个写入点手工 delete,漏一处就是「该更新的不更新」。
+const nodeJsonCache = new WeakMap<Proxy, string>()
+
+const jsonOfNode = (node: Proxy) => {
+  let json = nodeJsonCache.get(node)
+
+  if (json === undefined) {
+    json = JSON.stringify(node)
+    nodeJsonCache.set(node, json)
+  }
+
+  return json
+}
+
 // 按 name diff 合并进 proxyMap:内容未变的节点复用旧对象引用,订阅节点的组件
 // props 恒等、子树更新被 Vue 跳过 —— 两种后端的"整棵替换→全页重渲染"共用根治点。
 export const mergeProxyMap = (next: Record<string, Proxy>) => {
@@ -34,11 +51,12 @@ export const mergeProxyMap = (next: Record<string, Proxy>) => {
 
   for (const name of nextKeys) {
     const oldNode = prev[name]
+    const nextNode = next[name]
 
-    if (oldNode && JSON.stringify(oldNode) === JSON.stringify(next[name])) {
+    if (oldNode && jsonOfNode(oldNode) === jsonOfNode(nextNode)) {
       merged[name] = oldNode
     } else {
-      merged[name] = next[name]
+      merged[name] = nextNode
       changed = true
     }
   }
@@ -79,8 +97,12 @@ export const getLatencyByName = (proxyName: string, groupName?: string) => {
   return getLatencyFromHistory(history)
 }
 
-// 纯读:不再在读路径上补建 extra 结构(那会使写入者 computed 自失效、整组双倍求值;
-// 结构补齐移到了 clash.ts 的测速写路径里)。
+// 读路径上一次都不能写:往节点对象里补一个后端没有的 extra 空桶,会让 mergeProxyMap 的
+// JSON 判等必然不等 → 整张 proxyMap 换引用 → 所有组重算重渲染 → 下一帧再补桶,形成自持环。
+// 结构补齐属于 clash.ts 的测速写路径。空历史返回共享常量而不是新建 [],是因为这函数在每轮
+// renderProxies 里按节点数被调到,N 次即抛数组分配没有意义;不导出以免外部拿去 push。
+const EMPTY_HISTORY: Proxy['history'] = []
+
 export const getHistoryByName = (proxyName: string, groupName?: string) => {
   if (independentLatencyTest.value && can('independentLatency')) {
     const proxyNode = proxyMap.value[proxyName]
@@ -90,20 +112,14 @@ export const getHistoryByName = (proxyName: string, groupName?: string) => {
       return []
     }
 
-    if (!proxyNode?.extra) {
+    // 不下发 extra 的内核走链路终端节点的 history
+    if (!proxyNode.extra) {
       const nowNode = proxyMap.value[getNowProxyNodeName(proxyName)]
 
       return nowNode?.history
     }
 
-    if (!proxyNode.extra?.[url]) {
-      proxyNode.extra[url] = {
-        history: [],
-        alive: true,
-      }
-    }
-
-    return proxyNode?.extra?.[url]?.history
+    return proxyNode.extra[url]?.history ?? EMPTY_HISTORY
   }
 
   const nowNode = proxyMap.value[getNowProxyNodeName(proxyName)]

@@ -32,6 +32,42 @@ import type { SourceIPLabel } from '@/types'
 import { useStorage } from '@vueuse/core'
 import { computed } from 'vue'
 
+/**
+ * 顺序类设置的持久化边界：内置清单是唯一真相，localStorage 只负责记住用户排的序。
+ * 把三件本来要在每个调用点各记一遍的事一次吃进实现：
+ * ① 默认值一律走工厂函数 —— 直接传数组时 useStorage 会把模块级常量本体交给 ref，
+ *    组件里的就地写（splice / item.visible = x）会永久改坏常量，且首装时
+ *    `data.value === rawInit` 让「恢复默认」类赋值被 Object.is 短路掉，按钮变死的；
+ * ② 内置清单里有、存量顺序里没有的项自动补齐 —— 否则上游新增一个卡片/设置大类，
+ *    老用户那边就永久消失（全球连接卡当初就是踩了这个才补的补丁）；
+ * ③ 内置清单里已经没有的陈旧项自动剔除 —— 否则拖拽排序 UI 会拿到渲染不出来的空条目。
+ */
+const useOrderedStorage = <T>(
+  key: string,
+  createDefaults: () => T[],
+  identify: (item: T) => string,
+  // 新出现的项落在哪里，默认追加到末尾；返回 -1（没找到锚点）同样按追加处理
+  placeMissing: (order: T[], item: T) => number = (order) => order.length,
+) => {
+  const order = useStorage<T[]>(key, createDefaults)
+  const defaults = createDefaults()
+  const validIds = new Set(defaults.map(identify))
+  const kept = order.value.filter((item) => validIds.has(identify(item)))
+  const keptIds = new Set(kept.map(identify))
+  const missing = defaults.filter((item) => !keptIds.has(identify(item)))
+
+  // 对得上账就一个字节都不写：无条件赋值会让每次冷启动都白跑一次序列化 + StorageEvent 广播
+  if (missing.length > 0 || kept.length !== order.value.length) {
+    for (const item of missing) {
+      const index = placeMissing(kept, item)
+      kept.splice(index < 0 ? kept.length : index, 0, item)
+    }
+    order.value = kept
+  }
+
+  return order
+}
+
 const migrateLegacyStorageKey = (legacyKey: string, nextKey: string) => {
   if (typeof window === 'undefined') {
     return
@@ -208,33 +244,17 @@ const defaultOverviewCardOrder: { card: OVERVIEW_CARD; visible: boolean }[] = [
   },
 ]
 
-export const overviewCardOrder = useStorage<{ card: OVERVIEW_CARD; visible: boolean }[]>(
+// 存量配置首次补入全球连接时放在连接拓扑前；其他缺失卡片追加到末尾，
+// 已有全球连接的自定义顺序不改。克隆/补齐/剔除都由 useOrderedStorage 负责。
+export const overviewCardOrder = useOrderedStorage(
   'config/overview-card-order',
-  defaultOverviewCardOrder,
+  () => defaultOverviewCardOrder.map((item) => ({ ...item })),
+  (item) => item.card,
+  (order, item) =>
+    item.card === OVERVIEW_CARD.EarthGlobeCard
+      ? order.findIndex(({ card }) => card === OVERVIEW_CARD.TopologyCharts)
+      : order.length,
 )
-
-// 确保所有卡片都在配置中。存量配置首次补入全球连接时放在连接拓扑前；
-// 其他缺失卡片仍追加到末尾，已有全球连接的自定义顺序不改。
-const allCardTypes = Object.values(OVERVIEW_CARD)
-const existingCardTypes = new Set(overviewCardOrder.value.map((item) => item.card))
-const missingCards = allCardTypes.filter((card) => !existingCardTypes.has(card))
-
-if (missingCards.length > 0) {
-  const nextOrder = [...overviewCardOrder.value]
-
-  for (const card of missingCards) {
-    const item = { card, visible: true }
-
-    if (card === OVERVIEW_CARD.EarthGlobeCard) {
-      const topologyIndex = nextOrder.findIndex(({ card }) => card === OVERVIEW_CARD.TopologyCharts)
-      nextOrder.splice(topologyIndex === -1 ? nextOrder.length : topologyIndex, 0, item)
-    } else {
-      nextOrder.push(item)
-    }
-  }
-
-  overviewCardOrder.value = nextOrder
-}
 
 export const earthOriginSource = useStorage<'global' | 'china'>(
   'config/earth-origin-source',
@@ -357,9 +377,11 @@ export const connectionTableColumns = useStorage<CONNECTIONS_TABLE_ACCESSOR_KEY[
     CONNECTIONS_TABLE_ACCESSOR_KEY.ConnectTime,
   ],
 )
+// 卡片行是用户自由编排的二维数组，没有「内置清单」可对账，但同样需要克隆边界：
+// 直接传常量本体会让组件里的 splice / push 改坏 DETAILED_CARD_STYLE 本身
 export const connectionCardLines = useStorage<CONNECTIONS_TABLE_ACCESSOR_KEY[][]>(
   'config/connection-card-lines',
-  DETAILED_CARD_STYLE,
+  () => DETAILED_CARD_STYLE.map((line) => [...line]),
 )
 
 export const sourceIPLabelList = useStorage<SourceIPLabel[]>('config/source-ip-label-list', [])
@@ -391,9 +413,10 @@ export const hiddenSettingsItems = useStorage<Record<string, boolean>>(
 
 // settings menu order
 // 存储设置菜单项的顺序
-export const settingsMenuOrder = useStorage<SETTINGS_MENU_KEY[]>(
+export const settingsMenuOrder = useOrderedStorage<SETTINGS_MENU_KEY>(
   'config/settings-menu-order',
-  SETTINGS_CATEGORIES.map((category) => category.key),
+  () => SETTINGS_CATEGORIES.map((category) => category.key),
+  (key) => key,
 )
 
 // settings page two columns mode

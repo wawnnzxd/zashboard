@@ -61,6 +61,9 @@ let cancel: (() => void) | undefined
 export const initLogs = () => {
   cancel?.()
   logs.value = []
+  // 暂停是「这一次浏览」的状态,不跨会话:切后端后若不复位,新会话的日志会被旧的暂停态
+  // 一直挡在缓冲区里,日志页永远空白。
+  isPaused.value = false
 
   const accumulator = createLogsAccumulator(logs, () => isPaused.value)
   const subscription = backend().subscribeLogs({ level: logLevel.value }, accumulator.push)

@@ -41,8 +41,9 @@ export interface RouteLayer {
   setSnapshot: (snapshot: EarthRenderSnapshot, topologyChanged: boolean) => void
   setVisualMode: (mode: EarthVisualMode) => void
   setColorScheme: (scheme: EarthColorScheme) => void
-  // 返回本帧是否仍有流光在动(用于按需渲染)
-  update: (elapsed: number) => boolean
+  // 返回本帧是否仍有流光在动(用于按需渲染)。入参是**帧间隔**,调用方须与自转/脉冲
+  // 共用同一个钳制过的值,否则长停顿后流光会被一次性推到终点
+  update: (delta: number) => boolean
   dispose: () => void
 }
 
@@ -133,6 +134,10 @@ export const createRouteLayer = (options: RouteLayerOptions): RouteLayer => {
   const updateFlows = (delta: number, advance: boolean) => {
     if (disposed || flowPositions.length === 0) return false
 
+    // 流光熄灭的那一帧同样要置脏:此帧把 instanceCount 归零、把 flows 置为不可见,
+    // 但按需渲染若只看「本帧还有没有流光」就不会再画,末段线头会冻在终点小球上
+    // 到下一次因别的原因重画为止(扁平 + 关自转时约 150ms,每秒一次)
+    const wasVisible = flows.visible
     let flowSegmentIndex = 0
     const flowColor =
       visualMode === 'flat' && colorScheme === 'light' ? FLAT_LIGHT_FLOW_COLOR : FLOW_COLOR
@@ -212,7 +217,7 @@ export const createRouteLayer = (options: RouteLayerOptions): RouteLayer => {
       if (used > 0) flowColorBuffer.addUpdateRange(0, used)
       flowColorBuffer.needsUpdate = true
     }
-    return flowSegmentIndex > 0
+    return flowSegmentIndex > 0 || wasVisible
   }
 
   const buildRouteGeometry = (route: EarthRoute): RouteGeometryCache => {
@@ -357,8 +362,8 @@ export const createRouteLayer = (options: RouteLayerOptions): RouteLayer => {
       colorScheme = scheme
       updateFlows(0, false)
     },
-    update(elapsed) {
-      return updateFlows(elapsed, true)
+    update(delta) {
+      return updateFlows(delta, true)
     },
     dispose() {
       if (disposed) return

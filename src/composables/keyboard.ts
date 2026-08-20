@@ -198,9 +198,12 @@ export const useKeyboard = () => {
 
   const handleKeydown = (event: KeyboardEvent) => {
     const target = event.target as HTMLElement | null
+    // select 也自带按键语义(输入首字母跳选项),漏掉它会让「在下拉框上按 N」同时跳选项
+    // 和切后端 —— 凡是浏览器已经把这个按键解释掉的元素,快捷键都不该再抢一次。
     if (
       target instanceof HTMLInputElement ||
       target instanceof HTMLTextAreaElement ||
+      target instanceof HTMLSelectElement ||
       target?.isContentEditable
     ) {
       return

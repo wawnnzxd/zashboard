@@ -54,6 +54,27 @@ export const activeConnections = shallowRef<Connection[]>([])
 export const closedConnections = shallowRef<Connection[]>([])
 export const isPaused = ref(false)
 
+// 暂停 = 显示层的一张快照,不是数据管道上的闸门。
+//
+// 原实现把 `if (isPaused) return` 卡在 WS 的 watch 最上游,于是 activeConnections 的不变量
+// 变成了「这可能是任意时刻的旧快照」,而这条知识扩散到了五个互不相干的消费者:
+// 暂停期间关闭的连接**永久丢失**(closed 是一次性增量,既不进已关闭列表也不进历史库);
+// 代理页每个组头的实时速率静默冻结;概览页连接数折线以暂停瞬间的值画出一条**假的水平直线**
+// (看起来完全正常,最具误导性)。
+//
+// 现在源头永远最新,只有「连接页看到的那份列表」被冻住:frozen 一存就是同一时刻的 active + closed,
+// 所以「全部」tab 下两个数组不相交是结构保证,而不是靠人推理。
+const frozenConnections = shallowRef<{ active: Connection[]; closed: Connection[] } | null>(null)
+
+watch(isPaused, (paused) => {
+  frozenConnections.value = paused
+    ? { active: activeConnections.value, closed: closedConnections.value }
+    : null
+})
+
+const displayedActive = computed(() => frozenConnections.value?.active ?? activeConnections.value)
+const displayedClosed = computed(() => frozenConnections.value?.closed ?? closedConnections.value)
+
 // 内核自启动的上/下行总量。clash 随连接 WS 消息携带,在下方快照 watch 写入;
 // sing-box 的连接流不带总量,由 status 统计流经 store/overview 的 traffic watch 写入。
 export const downloadTotal = ref(0)
@@ -67,6 +88,10 @@ export const initConnections = () => {
   closedConnections.value = []
   downloadTotal.value = 0
   uploadTotal.value = 0
+  // 暂停是「这一次浏览」的状态,不是跨会话的偏好:切后端/编辑后端/401 重登后若不复位,
+  // 新会话的每一拍都会被旧的暂停态挡在门外,连接页永远空列表、用户以为新后端挂了。
+  isPaused.value = false
+  frozenConnections.value = null
   initAggregatedDataMap()
   // active(已带瞬时速率)与 closed(本拍新关闭增量)均由各后端 assembly 算好,store 只消费。
   const ws = fetchConnectionsAPI()
@@ -78,10 +103,8 @@ export const initConnections = () => {
       uploadTotal.value = snapshot.uploadTotal
     }
 
-    if (isPaused.value) {
-      return
-    }
-
+    // 注意:这里**不再**判 isPaused —— 冻结发生在下方的显示层。
+    // 源头是唯一不能跳过的地方:它承载 closed 增量与历史归集,跳过就是永久数据丢失。
     activeConnections.value = snapshot.active
 
     if (snapshot.closed.length > 0) {
@@ -90,8 +113,10 @@ export const initConnections = () => {
     }
   })
 
+  let unwatchIdleUDP: (() => void) | undefined
+
   if (autoDisconnectIdleUDP.value) {
-    watchOnce(activeConnections, () => {
+    unwatchIdleUDP = watchOnce(activeConnections, () => {
       activeConnections.value
         .filter((conn) => getConnectionNetwork(conn) !== 'tcp')
         .forEach((conn) => {
@@ -107,6 +132,9 @@ export const initConnections = () => {
 
   cancel = () => {
     unwatch()
+    // watchOnce 若一直没触发就会滞留到下一个会话:上一个后端武装的「一次性空闲 UDP 清理」
+    // 会在新后端的首拍触发,对新后端的连接成批发 DELETE。连切 N 次就有 N 个同拍触发。
+    unwatchIdleUDP?.()
     ws.close()
   }
 }
@@ -145,15 +173,18 @@ const sortKeyFunctionMap: Record<SORT_TYPE, (connection: Connection) => string |
   [SORT_TYPE.INBOUND_USER]: getInboundUserFromConnection,
 }
 
+// 连接页看到的那份列表:走显示层(暂停时是冻结快照,否则就是最新值)。
+// 组头速率、概览曲线等其余消费者直接读 activeConnections,因此不受暂停影响。
 export const connections = computed(() => {
   switch (connectionTabShow.value) {
     case CONNECTION_TAB_TYPE.ACTIVE:
-      return activeConnections.value
+      return displayedActive.value
     case CONNECTION_TAB_TYPE.CLOSED:
-      return closedConnections.value
-    // 全部:两个数组天然不相交(closed 是「上一拍存在、这一拍消失」的连接),无需去重。
+      return displayedClosed.value
+    // 全部:两个数组天然不相交(closed 是「上一拍存在、这一拍消失」的连接),无需去重;
+    // 冻结时两者取自同一时刻,不相交因此是结构保证而非人工推理。
     default:
-      return closedConnections.value.concat(activeConnections.value)
+      return displayedClosed.value.concat(displayedActive.value)
   }
 })
 
@@ -178,7 +209,9 @@ export const chainTrafficMap = computed(() => {
   return map
 })
 
-const closedConnectionIds = computed(() => new Set(closedConnections.value.map((conn) => conn.id)))
+// 与列表同源(冻结时用冻结的那份):否则暂停期间新关闭的连接会让画面上某一行
+// 突然被判成「已关闭」而淡化,与冻结语义矛盾。
+const closedConnectionIds = computed(() => new Set(displayedClosed.value.map((conn) => conn.id)))
 
 // 「已关闭」与「全部」两个 tab 下都用它判定单条连接是否已断,以决定关闭按钮与淡化样式。
 export const isClosedConnection = (connection: Connection) =>

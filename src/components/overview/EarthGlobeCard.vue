@@ -305,8 +305,7 @@
 </template>
 
 <script setup lang="ts">
-import { getIPFromIpipnetAPI, getIPFromIpsbAPI } from '@/api/geoip'
-import { ipForChina, ipForGlobal } from '@/composables/overview'
+import { awaitPublicIP, fetchPublicIP } from '@/composables/publicIP'
 import { themeColorScheme } from '@/helper/theme'
 import { prettyBytesHelper } from '@/helper/utils'
 import { activeConnections } from '@/store/connections'
@@ -537,90 +536,37 @@ watch([cardVisible, documentVisibility], () => {
   if (refreshPending && !isCardHidden()) scheduleRouteRefresh()
 })
 
-const cachedOriginIP = () => {
-  const info = earthOriginSource.value === 'global' ? ipForGlobal.value : ipForChina.value
-  return info.ipWithPrivacy.find(isValidIP) ?? ''
-}
-
-// 「网络信息」卡挂载时已在请求同一批公网 IP 接口(共享 ref 此时还是"获取中"),
-// 这里先等它的结果落地再决定是否自己再发一次,避免首屏对 ipip.net / ip.sb 重复请求
-const waitForSharedOriginIP = (timeout: number) =>
-  new Promise<string>((resolve) => {
-    const finish = (value: string) => {
-      stop()
-      clearTimeout(timer)
-      resolve(value)
-    }
-    const timer = setTimeout(() => finish(''), timeout)
-    const stop = watch([ipForChina, ipForGlobal], () => {
-      const ip = cachedOriginIP()
-      if (ip) finish(ip)
-    })
-  })
-
+// 取公网 IP 这件事整体交给 composables/publicIP.ts:它自己会在需要时发起请求并单飞,
+// 所以这里既不需要「先等 2.5 秒看别人取到没有」(关掉自动检测 / 隐藏了「网络信息」卡 /
+// 那张卡已经失败过一次时,那 2.5 秒是纯白等),也不需要自己写回共享 ref(写回时用了
+// 与卡片不同的打码规则,把公网 IP 前两段泄进了本该完全打码的视图)。
 const loadOrigin = async (force = false) => {
   const requestID = ++originRequestID
   const source = earthOriginSource.value
-  const cached = force ? '' : cachedOriginIP()
-
-  if (cached) {
-    originIP.value = cached
-    originStatus.value = 'ready'
-    scheduleRouteRefresh()
-    return
-  }
+  const stale = () => requestID !== originRequestID || source !== earthOriginSource.value
 
   originStatus.value = 'loading'
   originIP.value = ''
   routeCount.value = 0
   renderer.value?.setRoutes([])
 
-  if (!force) {
-    const shared = await waitForSharedOriginIP(2500)
-
-    if (requestID !== originRequestID || source !== earthOriginSource.value) return
-    if (shared) {
-      originIP.value = shared
-      originStatus.value = 'ready'
-      scheduleRouteRefresh()
-      return
-    }
+  if (force) {
+    await fetchPublicIP({ force: true })
   }
 
-  try {
-    if (source === 'global') {
-      const result = await getIPFromIpsbAPI()
+  const ip = await awaitPublicIP(source)
 
-      if (!isValidIP(result.ip)) throw new Error('Invalid origin IP')
-      ipForGlobal.value = {
-        ipWithPrivacy: [`${result.country} ${result.organization}`.trim(), result.ip],
-        ip: [`${result.country} ${result.organization}`.trim(), maskIP(result.ip)],
-      }
-      if (requestID === originRequestID && source === earthOriginSource.value) {
-        originIP.value = result.ip
-      }
-    } else {
-      const result = await getIPFromIpipnetAPI()
-      const ip = result.data.ip
+  if (disposed || stale()) return
 
-      if (!isValidIP(ip)) throw new Error('Invalid origin IP')
-      ipForChina.value = {
-        ipWithPrivacy: [result.data.location.join(' '), ip],
-        ip: [`${result.data.location[0]} ** ** **`, maskIP(ip)],
-      }
-      if (requestID === originRequestID && source === earthOriginSource.value) {
-        originIP.value = ip
-      }
-    }
-
-    if (requestID !== originRequestID || source !== earthOriginSource.value) return
-    originStatus.value = 'ready'
-    scheduleRouteRefresh()
-  } catch {
-    if (requestID !== originRequestID || source !== earthOriginSource.value) return
+  if (!ip) {
     originStatus.value = 'error'
     originIP.value = ''
+    return
   }
+
+  originIP.value = ip
+  originStatus.value = 'ready'
+  scheduleRouteRefresh()
 }
 
 const downloadDatabase = () => {

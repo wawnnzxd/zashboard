@@ -328,6 +328,7 @@ const en = {
     'The current backend is unavailable. Would you like to switch to another backend?',
   confirm: 'Confirm',
   backendSwitchTo: 'Switched backend to {backend}',
+  noAvailableBackend: 'No other backend is reachable',
 
   // Backend settings
   ipv6Test: 'IPv6 test',

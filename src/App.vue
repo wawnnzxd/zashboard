@@ -188,7 +188,16 @@ onMounted(async () => {
   setThemeColor()
 
   if (autoImportSettings.value) {
-    await importSettingsFromUrl()
+    try {
+      // 返回 true = 已写入 localStorage 并调了 reload，此时再跑自动同步等于二次覆盖 + 二次刷新；
+      // 其余返回 false 的路径(网络失败/HTTP 失败/JSON 失败/hash 未变/用户取消)都应当继续走自动同步
+      const imported = await importSettingsFromUrl()
+      if (imported) return
+    } catch (error) {
+      // importSettingsFromUrl 已把导入失败吃进实现，这里兜的是它之外的意外抛出
+      //（例如 localStorage 写满）—— 无论如何都不能让导入失败连坐掉下面的自动同步
+      console.error('Failed to auto-import settings from URL:', error)
+    }
   }
 
   if (autoSyncSettings.value) {
@@ -210,7 +219,9 @@ const updateServiceWorker = registerSW({
 })
 
 const blurClass = computed(() => {
-  if (!backgroundImage.value || blurIntensity.value === 0) {
+  // 用 > 0 而不是 === 0：滑块的 v-model 不转数字，拖到 0 时值是字符串 "0"，
+  // 严格相等判不出来 → 合成层摘不掉。与 TopologyCharts 的既有写法对齐
+  if (!backgroundImage.value || !(blurIntensity.value > 0)) {
     return ''
   }
 

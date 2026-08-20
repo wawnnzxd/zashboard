@@ -83,11 +83,37 @@ export const activeFolderId = computed({
   },
 })
 
+// 组名集合提成 computed:matchRule 是「每个组 × 每个文件夹 × 每条规则」调用的,原来
+// isNodeOnly 每次调用都重建一次全量 Set,整体是 O(组数² × 文件夹数)。文件夹模式在
+// 组数 > FOLDER_MODE_AUTO_THRESHOLD 时才自动开启 —— 恰好只对大配置生效,正是这个
+// 复杂度最疼的场合。挂在 computed 上后随 proxyGroupList 一起失效,语义不变。
+const proxyGroupNameSet = computed(() => new Set(proxyGroupList.value))
+
 const isNodeOnly = (groupName: string) => {
   const g = proxyMap.value[groupName]
   if (!g?.all || g.all.length === 0) return false
-  const groupSet = new Set(proxyGroupList.value)
+  const groupSet = proxyGroupNameSet.value
   return !g.all.some((member) => groupSet.has(member))
+}
+
+// 正则按「规则对象」缓存,而不是按 pattern 字符串开一张全局表:规则对象来自
+// folderState(useStorage 的响应式对象),生命周期就是这条规则本身,WeakMap 随它一起
+// 回收;编辑规则输入框时逐字符产生的中间 pattern 不会永久堆在内存里。同时记下编译时
+// 用的 pattern,用户就地改写规则后缓存自动作废,调用方不需要记得手动失效。
+const compiledRuleRegex = new WeakMap<FolderRule, { pattern: string; regex: RegExp | null }>()
+
+const getRuleRegex = (rule: Extract<FolderRule, { pattern: string }>): RegExp | null => {
+  const cached = compiledRuleRegex.get(rule)
+  if (cached && cached.pattern === rule.pattern) return cached.regex
+
+  let regex: RegExp | null = null
+  try {
+    regex = new RegExp(rule.pattern)
+  } catch {
+    regex = null
+  }
+  compiledRuleRegex.set(rule, { pattern: rule.pattern, regex })
+  return regex
 }
 
 const matchRule = (groupName: string, rule: FolderRule): boolean => {
@@ -96,20 +122,26 @@ const matchRule = (groupName: string, rule: FolderRule): boolean => {
   }
   if (rule.type === 'regex' || rule.type === 'excludeRegex') {
     if (!rule.pattern) return false
-    try {
-      return new RegExp(rule.pattern).test(groupName)
-    } catch {
-      return false
-    }
+    return getRuleRegex(rule)?.test(groupName) ?? false
   }
   return false
 }
 
+// 单趟扫描代替两次 filter:这个函数同样是「每个组 × 每个文件夹」调用,原实现每次调用
+// 都要为 includes / excludes 各建一个临时数组。返回语义逐字保持:没有任何 include 命中
+// 就不属于该文件夹,命中之后再被任意 excludeRegex 否掉。
 const folderRuleMatch = (groupName: string, rules: FolderRule[]): boolean => {
-  const includes = rules.filter((r) => r.type === 'auto' || r.type === 'regex')
-  const excludes = rules.filter((r) => r.type === 'excludeRegex')
-  if (!includes.some((r) => matchRule(groupName, r))) return false
-  return !excludes.some((r) => matchRule(groupName, r))
+  let included = false
+
+  for (const rule of rules) {
+    if (rule.type === 'excludeRegex') {
+      if (matchRule(groupName, rule)) return false
+    } else if (!included && matchRule(groupName, rule)) {
+      included = true
+    }
+  }
+
+  return included
 }
 
 const sortedFolders = computed(() =>

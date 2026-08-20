@@ -330,6 +330,7 @@ const ru: LANG_MESSAGE = {
     'Текущий бэкенд недоступен. Попробуйте переключиться на другой бэкенд?',
   confirm: 'Подтвердить',
   backendSwitchTo: 'Бэкенд переключен на {backend}',
+  noAvailableBackend: 'Нет других доступных бэкендов',
 
   // Backend settings
   ipv6Test: 'IPv6-тест',

@@ -68,6 +68,7 @@
 import SettingItem from '@/components/settings/SettingItem.vue'
 import { GENERAL_ITEM_KEYS } from '@/config/settingsItems'
 import { deleteBase64FromIndexedDB, LOCAL_IMAGE, saveBase64ToIndexedDB } from '@/helper/indexeddb'
+import { showNotification } from '@/helper/notification'
 import {
   autoTheme,
   blurIntensity,
@@ -201,15 +202,25 @@ const handlerFileChange = (e: Event) => {
   reader.onload = async () => {
     const imageURL = reader.result as string
 
+    // 先清空 input:失败后重选同一个文件也要能再次触发 change
+    target.value = ''
+
     try {
       confirmApplyThemeByBackgroundTone(await detectBackgroundTone(imageURL))
     } catch {
       // Keep the current theme if tone detection fails.
     }
 
+    // saveBase64ToIndexedDB 在任何 await 之前就把图写进内存缓存,所以先改 URL 也能
+    // 立刻显示新图(不必为了正确性而等落库);这里 await 只为拿落库结果做失败提示。
     customBackgroundURL.value = LOCAL_IMAGE + '-' + Date.now()
-    saveBase64ToIndexedDB(imageURL)
-    target.value = ''
+
+    if (!(await saveBase64ToIndexedDB(imageURL))) {
+      showNotification({
+        content: `${t('saveFailed')}: ${t('customBackgroundURL')}`,
+        type: 'alert-error',
+      })
+    }
   }
   reader.readAsDataURL(file)
 }

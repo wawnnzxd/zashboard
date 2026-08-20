@@ -108,43 +108,48 @@
 
       <template v-if="backendList.length">
         <div class="text-base-content/50 mt-2 text-xs">{{ $t('backend') }}</div>
-        <Draggable
-          class="-mr-2 flex max-h-48 flex-1 flex-col gap-1 overflow-y-auto pr-2"
-          v-model="backendList"
-          group="list"
-          handle=".drag-handle"
-          :animation="150"
-          :item-key="'uuid'"
-        >
-          <template #item="{ element }">
-            <div
-              :key="element.uuid"
-              class="group hover:bg-base-200 flex items-center gap-1 rounded-lg pr-1 transition-colors"
-            >
-              <ChevronUpDownIcon
-                class="drag-handle text-base-content/30 ml-1 h-4 w-4 flex-none cursor-grab"
-              />
-              <button
-                class="min-w-0 flex-1 truncate py-1.5 text-left text-sm"
-                @click="selectBackend(element.uuid)"
+        <!-- 尺寸/滚动留在这层外壳上:Draggable 是懒 chunk,到达前它只渲染成注释占位,
+             高度类若留在 Draggable 上,列表区会先塌成 0 高再弹开,带动下方的
+             LanguageSelect 位移。外壳先把高度定死,chunk 到达前后布局逐像素一致。 -->
+        <div class="-mr-2 flex max-h-48 flex-1 flex-col overflow-y-auto pr-2">
+          <Draggable
+            class="flex flex-col gap-1"
+            v-model="backendList"
+            group="list"
+            handle=".drag-handle"
+            :animation="150"
+            :item-key="'uuid'"
+          >
+            <template #item="{ element }">
+              <div
+                :key="element.uuid"
+                class="group hover:bg-base-200 flex items-center gap-1 rounded-lg pr-1 transition-colors"
               >
-                {{ getLabelFromBackend(element) }}
-              </button>
-              <button
-                class="btn btn-circle btn-ghost btn-xs text-base-content/40 hover:text-base-content opacity-0 group-hover:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100"
-                @click="editBackend(element)"
-              >
-                <PencilIcon class="h-4 w-4" />
-              </button>
-              <button
-                class="btn btn-circle btn-ghost btn-xs text-base-content/40 hover:text-error opacity-0 group-hover:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100"
-                @click="removeBackend(element.uuid)"
-              >
-                <TrashIcon class="h-4 w-4" />
-              </button>
-            </div>
-          </template>
-        </Draggable>
+                <ChevronUpDownIcon
+                  class="drag-handle text-base-content/30 ml-1 h-4 w-4 flex-none cursor-grab"
+                />
+                <button
+                  class="min-w-0 flex-1 truncate py-1.5 text-left text-sm"
+                  @click="selectBackend(element.uuid)"
+                >
+                  {{ getLabelFromBackend(element) }}
+                </button>
+                <button
+                  class="btn btn-circle btn-ghost btn-xs text-base-content/40 hover:text-base-content opacity-0 group-hover:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100"
+                  @click="editBackend(element)"
+                >
+                  <PencilIcon class="h-4 w-4" />
+                </button>
+                <button
+                  class="btn btn-circle btn-ghost btn-xs text-base-content/40 hover:text-error opacity-0 group-hover:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100"
+                  @click="removeBackend(element.uuid)"
+                >
+                  <TrashIcon class="h-4 w-4" />
+                </button>
+              </div>
+            </template>
+          </Draggable>
+        </div>
       </template>
 
       <div class="mt-4 sm:hidden">
@@ -181,9 +186,13 @@ import {
   QuestionMarkCircleIcon,
   TrashIcon,
 } from '@heroicons/vue/24/outline'
-import { reactive, ref, watch } from 'vue'
+import { defineAsyncComponent, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import Draggable from 'vuedraggable'
+
+// vuedraggable(CJS,还拖着 sortablejs 与 Vue 完整版/模板编译器)只有这一处后端
+// 排序用到,而已配好后端的用户永远不会再进 /setup。SetupPage 本身是同步路由,
+// 静态引入等于把这条边整个拉回首屏 entry,抵消 ProxiesPage 已做的异步化。
+const Draggable = defineAsyncComponent(() => import('vuedraggable'))
 
 const { t } = useI18n()
 

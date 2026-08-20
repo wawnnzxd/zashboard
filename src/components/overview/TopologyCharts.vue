@@ -4,12 +4,16 @@
       to="body"
       :disabled="!isFullScreen"
     >
+      <!-- custom-background / custom-blur 必须与 App.vue 的守卫保持一致:没有背景图时
+           alpha 规则只是把元素混成同色不透明底、模糊的是一片纯色,视觉产出为零,
+           却让里面每个 .card/.base-container/.table thead 都被提升为独立合成层逐帧快照 -->
       <div
         :class="
           isFullScreen
             ? [
-                'bg-base-100 custom-background fixed inset-0 z-[9999] flex h-screen w-screen flex-col bg-cover bg-center p-4',
-                blurIntensity > 0 ? 'custom-blur' : '',
+                'bg-base-100 fixed inset-0 z-[9999] flex h-screen w-screen flex-col p-4',
+                backgroundImage && 'custom-background bg-cover bg-center',
+                backgroundImage && blurIntensity > 0 ? 'custom-blur' : '',
               ]
             : undefined
         "
@@ -123,7 +127,7 @@ import {
   PauseIcon,
   PlayIcon,
 } from '@heroicons/vue/24/outline'
-import { useWindowSize } from '@vueuse/core'
+import { useDocumentVisibility, useElementVisibility, useWindowSize } from '@vueuse/core'
 import type { CSSProperties } from 'vue'
 import { computed, nextTick, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -138,6 +142,13 @@ const { width: windowWidth, height: windowHeight } = useWindowSize()
 const { colors, fontFamily } = useChartTheme(chartRef)
 
 const isPaused = computed(() => isManuallyPaused.value || isTooltipVisible.value)
+// useEChart 的门控只挡住 setOption,挡不住上游 computed 求值;这里在组件侧复述一遍
+// 同样的可见性条件,让派生数据本身也能停下来(useEChart 目前没把 hidden 暴露出来)
+const chartVisible = useElementVisibility(chartRef)
+const documentVisibility = useDocumentVisibility()
+const frozen = computed(
+  () => isPaused.value || !chartVisible.value || documentVisibility.value !== 'visible',
+)
 const shouldRotate = computed(
   () => isFullScreen.value && isMiddleScreen.value && windowHeight.value > windowWidth.value,
 )
@@ -146,9 +157,14 @@ const chartSurfaceStyle = computed<CSSProperties>(() => {
   if (!isFullScreen.value) return {}
 
   const style: CSSProperties = {
-    backdropFilter: `blur(${blurIntensity.value}px)`,
     height: '100%',
     width: '100%',
+  }
+
+  // 同上:没有背景图时模糊的是纯色,而显式的 backdrop-filter(哪怕 blur(0px))
+  // 一样会强制建合成层 —— 只有真有图且真要模糊时才下发
+  if (backgroundImage.value && blurIntensity.value > 0) {
+    style.backdropFilter = `blur(${blurIntensity.value}px)`
   }
 
   if (!shouldRotate.value) return style
@@ -179,7 +195,15 @@ const isSameTopology = (a: TopologyData, b: TopologyData) =>
       link.value === b.links[i].value,
   )
 
+// 画布定格(暂停/悬停 tooltip)或根本看不见时,拓扑必须跟着定格 —— 这不只是省算力:
+// topology.ts 按 layer+name 全量重编号,node.id 会整体漂移,echarts 手里那份旧 link 的
+// source/target 就会指到另一个节点(边 tooltip 显示错名字),isEmpty 也会翻真、
+// 把「无数据」文案盖在仍然画着的桑基图上。冻结后这两份真相天然对齐。
+// 形状上关键的一点:提前 return 时**不读** activeConnections,整条连接流被摘出依赖图,
+// 是真正的零工作;而 frozen 自己是依赖,门一开必然重算 —— 「恢复补一拍」不需要任何记账。
 const topologyData = computed<TopologyData>((prev) => {
+  if (prev && frozen.value) return prev
+
   const next = buildTopologyData(
     (topologyApplyConnectionFilter.value
       ? filteredActiveConnections.value
