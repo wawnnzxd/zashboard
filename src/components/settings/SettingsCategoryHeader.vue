@@ -1,7 +1,7 @@
 <template>
   <div
     v-if="settingsEditMode || hasOwnLabel"
-    class="text-base-content/85 mt-1 mb-2.5 flex items-center gap-2 px-1 text-base font-semibold tracking-tight"
+    class="settings-category-header text-base-content/85 mt-1 mb-3 flex items-center gap-2 px-1 text-base font-semibold tracking-tight"
   >
     <SettingVisibilityToggle :setting-key="item.key" />
     <span class="flex-1">{{ $t(item.label) }}</span>

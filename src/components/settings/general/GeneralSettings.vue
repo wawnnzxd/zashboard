@@ -1,9 +1,9 @@
 <template>
   <template v-if="hasVisibleGeneralItems">
-    <div class="settings-section-label">
-      {{ $t('general') }}
-    </div>
-    <div class="settings-grid">
+    <div
+      class="settings-grid"
+      :data-label="$t('general')"
+    >
       <SettingItem
         :setting-key="k.actions"
         :when="can('dashboardUpgrade')"

@@ -1,10 +1,10 @@
 <template>
-  <div class="flex flex-col text-sm">
+  <div class="flex flex-col gap-3 text-sm">
     <template v-if="hasVisibleLatencyItems">
-      <div class="settings-section-label">
-        {{ $t('latency') }}
-      </div>
-      <div class="settings-grid">
+      <div
+        class="settings-grid"
+        :data-label="$t('latency')"
+      >
         <SettingItem :setting-key="k.speedtestMode">
           <div class="setting-item-label">
             {{ $t('speedtestMode') }}
@@ -96,10 +96,10 @@
       </div>
     </template>
     <template v-if="hasVisibleProxyStyleItems">
-      <div class="settings-section-label">
-        {{ $t('appearance') }}
-      </div>
-      <div class="settings-grid">
+      <div
+        class="settings-grid"
+        :data-label="$t('appearance')"
+      >
         <SettingItem :setting-key="k.proxyFolderMode">
           <div class="setting-item-label">
             {{ $t('proxyFolderMode') }}

@@ -52,18 +52,18 @@
 
     <!-- Content Area -->
     <template v-if="isTwoColumns">
-      <div class="mx-auto grid w-full max-w-7xl grid-cols-2 gap-12 p-3">
+      <div class="mx-auto grid w-full max-w-7xl grid-cols-2 gap-6 p-3">
         <div
           v-for="col in [0, 1]"
           :key="col"
-          class="flex flex-col gap-3"
+          class="flex flex-col gap-6"
         >
           <div
             v-for="item in menuItems.filter((_, i) => columnAssignment[i] === col)"
             :key="item.key"
             :id="`item-${item.key}`"
             :data-key="item.key"
-            class="settings-category mb-4 rounded-lg p-2 md:mb-6"
+            class="settings-category rounded-lg p-2"
             :class="
               settingsEditMode && isSettingHidden(item.key) ? 'settings-category--hidden' : ''
             "
@@ -78,14 +78,14 @@
     </template>
     <div
       v-else
-      class="mx-auto w-full max-w-3xl space-y-1 p-3 md:space-y-2 md:px-8 md:py-6"
+      class="mx-auto w-full max-w-3xl space-y-6 p-3 md:px-8 md:py-6"
     >
       <div
         v-for="item in menuItems"
         :key="item.key"
         :id="`item-${item.key}`"
         :data-key="item.key"
-        class="settings-category mb-4 md:mb-6"
+        class="settings-category"
         :class="settingsEditMode && isSettingHidden(item.key) ? 'settings-category--hidden' : ''"
       >
         <SettingsCategoryHeader :item="item" />

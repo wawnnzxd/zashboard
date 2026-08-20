@@ -1,6 +1,6 @@
 <template>
-  <div class="relative flex flex-col text-sm">
-    <div class="flex items-center gap-2 px-1">
+  <div class="relative flex flex-col gap-3 text-sm">
+    <div class="mt-1 flex h-6 items-center gap-2 px-1 leading-6">
       <div class="indicator">
         <span
           v-if="isUIUpdateAvailable"
@@ -12,7 +12,7 @@
         <a
           href="https://github.com/wawnnzxd/zashboard"
           target="_blank"
-          class="text-lg font-semibold"
+          class="text-lg leading-6 font-semibold"
         >
           <!-- 渐变字标只作用于品牌名;版本号普通无衬线、极小号、低灰度,勉强可见即可 -->
           <span class="desire-wordmark">Desire</span>

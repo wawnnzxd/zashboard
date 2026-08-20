@@ -1,9 +1,9 @@
 <template>
   <template v-if="hasVisibleStyleItems">
-    <div class="settings-section-label">
-      {{ $t('appearance') }}
-    </div>
-    <div class="settings-grid">
+    <div
+      class="settings-grid"
+      :data-label="$t('appearance')"
+    >
       <SettingItem :setting-key="k.autoSwitchTheme">
         <div class="setting-item-label">
           {{ $t('autoSwitchTheme') }}

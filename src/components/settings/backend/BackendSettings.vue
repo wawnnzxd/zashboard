@@ -183,10 +183,10 @@
       v-if="can('configPatch') && configs && hasVisibleSettings"
       class="grid"
     >
-      <div class="settings-section-label">
-        {{ $t('settings') }}
-      </div>
-      <div class="settings-grid">
+      <div
+        class="settings-grid"
+        :data-label="$t('settings')"
+      >
         <SettingItem
           :setting-key="k.ports"
           class="py-3"
