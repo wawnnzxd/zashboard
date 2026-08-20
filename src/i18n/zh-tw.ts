@@ -484,6 +484,7 @@ const zhTW: LANG_MESSAGE = {
   importFromBackendTip:
     '預設的./zashboard-settings.json位於ui資料夾下，匯入前請確保ui資料夾下存在配置檔案。',
   importFailed: '匯入失敗，請檢查url {url}',
+  importFileFailed: '匯入失敗，{file} 不是有效的設定檔',
   autoImportFromUrl: '自動匯入',
   autoImportFromUrlTip:
     '啟用後，每次開啟Desire時會自動從url設定匯入並計算hash，如果hash與上次匯入的hash不同，則重新匯入並重新整理頁面。',

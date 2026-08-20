@@ -15,6 +15,7 @@ import {
 } from '@/helper/indexeddb'
 import type { Connection } from '@/types'
 import ipaddr from 'ipaddr.js'
+import { useStorage } from '@vueuse/core'
 import { shallowRef } from 'vue'
 import { activeBackend } from './setup'
 
@@ -471,3 +472,62 @@ export const saveConnectionHistory = (newClosedConnections: Connection[]) => {
 
   accumulateCurrent(newClosedConnections)
 }
+
+// ---------------------------------------------------------------------------
+// 保留期策略:这份历史自己的事,不该由某张卡片是否被渲染来决定。
+//
+// 原实现挂在 ConnectionHistory.vue 的 onMounted 上;后来挪到该 SFC 的模块作用域,
+// 但概览卡片是 defineAsyncComponent 懒加载的 —— 用户在卡片设置里隐藏它,那个模块
+// 根本不会被求值,于是设置里显示着「每月清理」,实际永不触发,只剩按下载量裁剪兜底。
+// 放在这里则跟随连接流一起加载,与卡片是否可见无关。
+// ---------------------------------------------------------------------------
+
+export enum AutoCleanupInterval {
+  Never = 'never',
+  Week = 'week',
+  Month = 'month',
+  Quarter = 'quarter',
+}
+
+export const autoCleanupInterval = useStorage<AutoCleanupInterval>(
+  'config/connection-history-auto-cleanup-interval',
+  AutoCleanupInterval.Month,
+)
+
+// 起始时间刻意留在 cache/(不随设置同步):它描述的是本机 IndexedDB 里这份历史从何时开始
+// 攒的,换台设备本来就是空表、从零计时才对;跟着设置同步过去反而会拿别人的时钟裁本机数据。
+export const historyStartTime = useStorage<number>(
+  'cache/connection-history-stats-start-time',
+  Date.now(),
+)
+
+const CLEANUP_INTERVAL_MS: Record<AutoCleanupInterval, number> = {
+  [AutoCleanupInterval.Never]: 0,
+  [AutoCleanupInterval.Week]: 7 * 24 * 60 * 60 * 1000,
+  [AutoCleanupInterval.Month]: 30 * 24 * 60 * 60 * 1000,
+  [AutoCleanupInterval.Quarter]: 90 * 24 * 60 * 60 * 1000,
+}
+
+/** 到期即清空。只读两个 localStorage 值,没到期不碰 IndexedDB,冷启动零额外开销。 */
+export const ensureHistoryRetention = async () => {
+  const interval = CLEANUP_INTERVAL_MS[autoCleanupInterval.value] ?? 0
+
+  if (!interval) {
+    return
+  }
+  if (Date.now() - historyStartTime.value < interval) {
+    return
+  }
+
+  try {
+    await clearConnectionHistory()
+    historyStartTime.value = Date.now()
+  } catch (error) {
+    console.error('Failed to perform auto cleanup:', error)
+  }
+}
+
+// 模块求值即检查一次。此时还没有活跃后端,clearConnectionHistoryFromIndexedDB 清的是
+// 整个 store(「清空历史」本就是全局语义),随后 initAggregatedDataMap 会以空表正常起步;
+// 两者都经 enqueuePersistence 串行,不会互相踩。
+void ensureHistoryRetention()

@@ -493,6 +493,7 @@ const en = {
   importFromBackendTip:
     'The default ./zashboard-settings.json is located in the ui folder. Please ensure the ui folder exists and contains the configuration file.',
   importFailed: 'Import failed, please check the URL: {url}',
+  importFileFailed: 'Import failed: {file} is not a valid settings file',
   autoImportFromUrl: 'Auto-import',
   autoImportFromUrlTip:
     'When enabled, settings will be automatically imported from the URL when opening Desire. If the hash differs from the last imported hash, settings will be re-imported and the page will be refreshed.',

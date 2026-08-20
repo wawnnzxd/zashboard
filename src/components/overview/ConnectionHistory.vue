@@ -192,62 +192,14 @@
 </template>
 
 <script lang="ts">
-import { clearConnectionHistory } from '@/store/connHistory'
+import {
+  AutoCleanupInterval,
+  autoCleanupInterval,
+  clearConnectionHistory,
+  historyStartTime,
+} from '@/store/connHistory'
 import { useStorage } from '@vueuse/core'
 
-enum AutoCleanupInterval {
-  Never = 'never',
-  Week = 'week',
-  Month = 'month',
-  Quarter = 'quarter',
-}
-
-const autoCleanupInterval = useStorage<AutoCleanupInterval>(
-  'config/connection-history-auto-cleanup-interval',
-  AutoCleanupInterval.Month,
-)
-// 起始时间刻意留在 cache/(不随设置同步):它描述的是本机 IndexedDB 里这份历史从何时开始
-// 攒的,换台设备本来就是空表、从零计时才对;跟着设置同步过去反而会拿别人的时钟裁本机数据。
-const startTime = useStorage<number>('cache/connection-history-stats-start-time', Date.now())
-
-const getCleanupIntervalMs = (interval: AutoCleanupInterval): number => {
-  switch (interval) {
-    case AutoCleanupInterval.Week:
-      return 7 * 24 * 60 * 60 * 1000
-    case AutoCleanupInterval.Month:
-      return 30 * 24 * 60 * 60 * 1000
-    case AutoCleanupInterval.Quarter:
-      return 90 * 24 * 60 * 60 * 1000
-    case AutoCleanupInterval.Never:
-    default:
-      return 0
-  }
-}
-
-const checkAndPerformAutoCleanup = async () => {
-  if (autoCleanupInterval.value === AutoCleanupInterval.Never) {
-    return
-  }
-
-  const now = Date.now()
-  const intervalMs = getCleanupIntervalMs(autoCleanupInterval.value)
-  const timeSinceLastCleanup = now - startTime.value
-
-  if (timeSinceLastCleanup >= intervalMs) {
-    try {
-      await clearConnectionHistory()
-      startTime.value = now
-    } catch (error) {
-      console.error('Failed to perform auto cleanup:', error)
-    }
-  }
-}
-
-// 定时清理是这份历史数据自己的策略,原来挂在组件 onMounted 上 —— 等于「卡片必须被渲染
-// 出来才会清理」:在概览卡片设置里把它隐藏,用户仍能在设置里看到「每月清理」生效中,实际
-// 永不触发。挪到模块求值时执行,隐藏卡片也照常清理;检查本身只读两个 localStorage 值,
-// 到期才碰 IndexedDB,不会给冷启动加全表扫描。
-void checkAndPerformAutoCleanup()
 </script>
 
 <script setup lang="ts">
@@ -436,7 +388,7 @@ const totalSize = computed(() => rowVirtualizer.value.getTotalSize() + 24)
 
 const showClearDialog = ref(false)
 const totalConnectionsTip = computed(() => {
-  const dayjsTime = dayjs(startTime.value)
+  const dayjsTime = dayjs(historyStartTime.value)
 
   return t('totalConnectionsTip', {
     statsStartTime: `${dayjsTime.format('YYYY-MM-DD HH:mm')} (${dayjsTime.fromNow()})`,
@@ -445,7 +397,7 @@ const totalConnectionsTip = computed(() => {
 const handleClearHistory = async () => {
   try {
     await clearConnectionHistory()
-    startTime.value = Date.now()
+    historyStartTime.value = Date.now()
     showClearDialog.value = false
     showNotification({
       content: t('clearConnectionHistorySuccess'),

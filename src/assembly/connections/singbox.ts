@@ -30,9 +30,25 @@ const fetchSingboxConnections = (): {
   let newlyClosed: Connection[] = []
   let timer: ReturnType<typeof setTimeout> | null = null
 
-  // UPDATE 事件不携带 connection,只有 id + delta;速率即取本秒 delta(与官方 dashboard 一致)。
+  // UPDATE 事件不携带 connection,只有 id + delta。
+  // **量纲:字节/秒**(见 accessor.ts 的 ConnectionsSnapshot 契约)—— delta 是「距上一次推送」的
+  // 增量,而推送节拍并不保证是 1 秒,所以要按本次推送的真实间隔归一化,与 clash 侧对齐。
   const enrich = (c: PbConnection | Connection, down: number, up: number): Connection =>
     Object.assign({}, c, { downloadSpeed: down, uploadSpeed: up }) as Connection
+
+  // 推送间隔的归一化基准。超出 [200ms, 3000ms] 视为「没有有效时间基准」(首次推送、
+  // 断流重连后的追帧、长时间挂起后的第一拍),该次的速率一律归零 —— 与「首拍为 0」同语义,
+  // 下一次推送自愈。不归零的话:间隔过大 → 把整段断流的累计量当成一秒的速率(巨大假值);
+  // 间隔过小 → 除出 Infinity 级尖刺,归一化反而放大了它本要修的问题。
+  let lastMessageAt = 0
+  const rateDivisor = () => {
+    const now = performance.now()
+    const elapsed = now - lastMessageAt
+
+    lastMessageAt = now
+
+    return elapsed >= 200 && elapsed <= 3000 ? elapsed / 1000 : 0
+  }
 
   // 把一个连接归入「本拍新关闭」并从活跃表移除。NEW/UPDATE/CLOSED 任意事件携带的连接,只要
   // closedAt > 0(初始快照里夹带的历史已关闭连接、或最终关闭快照)都走这里,避免遗留在活跃表。
@@ -69,9 +85,12 @@ const fetchSingboxConnections = (): {
     if (msg.reset) {
       conns.clear()
     }
+    // 每次推送算一次:同一条消息里的所有 delta 共用这一个基准
+    const divisor = rateDivisor()
+
     for (const event of msg.events) {
-      const downDelta = Number(event.downlinkDelta)
-      const upDelta = Number(event.uplinkDelta)
+      const downDelta = divisor ? Number(event.downlinkDelta) / divisor : 0
+      const upDelta = divisor ? Number(event.uplinkDelta) / divisor : 0
 
       switch (event.type) {
         case ConnectionEventType.CONNECTION_EVENT_NEW:
@@ -87,7 +106,7 @@ const fetchSingboxConnections = (): {
             if (event.connection.closedAt > 0n) close(event.id, event.connection)
             else conns.set(event.id, enrich(event.connection, downDelta, upDelta))
           } else {
-            // 仅 delta:沿用上次的连接,累加总量,速率取本拍 delta。
+            // 仅 delta:沿用上次的连接。累计总量用**原始** delta(不能除),速率用归一化后的值。
             // 单次 spread 合并(3 对象→1),保持不可变语义(卡片/详情快照依赖引用变化)。
             const prev = conns.get(event.id)
             if (prev) {

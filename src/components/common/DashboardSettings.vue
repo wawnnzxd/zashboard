@@ -272,8 +272,8 @@ const handlerJsonUpload = () => {
   const failed = (reason: unknown) => {
     console.error('Failed to import settings from file:', reason)
     showNotification({
-      content: 'importFailed',
-      params: { url: file.name },
+      content: 'importFileFailed',
+      params: { file: file.name },
       type: 'alert-error',
     })
     // 不清空的话，失败后再选同一个文件不会触发 change 事件，用户看到的是「重试也没反应」
