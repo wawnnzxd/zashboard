@@ -31,7 +31,7 @@ export interface SessionResource {
 }
 
 // 新建的资源自动登记,`resetSessionResources()` 一次全收 ——
-// 新增一个资源默认就是安全的,而不是「新增时必须记得去 backendSession 里加一行 reset」。
+// 新增一个资源默认就是安全的,而不是「新增时必须记得去 assembly/session 里加一行 reset」。
 const registry = new Set<SessionResource>()
 
 export const createSessionResource = (load: Load): SessionResource => {

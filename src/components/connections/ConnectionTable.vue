@@ -10,7 +10,15 @@
     @mouseup="handleMouseUp"
     @mouseleave="handleMouseUp"
   >
-    <div :style="{ height: `${totalSize}px` }">
+    <!--
+      玻璃挂在这一层：行是 transform 定位的，tbody 只有已渲染的那几十行那么高，
+      只有这个包裹层的盒子等于虚拟总高（见 appearance.css）。
+    -->
+    <div
+      class="table-glass"
+      :class="isManualTable ? 'min-w-max' : 'min-w-min'"
+      :style="{ height: `${totalSize}px` }"
+    >
       <table
         :class="['table', sizeOfTable, isManualTable && 'table-fixed']"
         :style="
@@ -126,9 +134,9 @@
               height: `${virtualRow.size}px`,
               transform: `translateY(${virtualRow.start - index * virtualRow.size}px)`,
             }"
-            class="hover:bg-primary! hover:text-primary-content!"
+            class="hover:bg-primary/85! hover:text-primary-content!"
             :class="[
-              virtualRow.index % 2 === 0 ? 'bg-base-150' : 'bg-base-100',
+              virtualRow.index % 2 === 0 && 'table-row-stripe',
               !isDragging ? 'cursor-pointer' : 'cursor-grabbing',
               connectionTabShow === CONNECTION_TAB_TYPE.ALL &&
               isClosedConnection(rows[virtualRow.index].original)
@@ -227,6 +235,8 @@ import {
 } from '@/helper'
 import { backgroundImage } from '@/helper/indexeddb'
 import { showNotification } from '@/helper/notification'
+import { notifyRequestError } from '@/helper/requestError'
+import { useStorage } from '@/helper/storage'
 import {
   connectionFilter,
   connectionTabShow,
@@ -269,7 +279,7 @@ import {
   type SortingState,
 } from '@tanstack/vue-table'
 import { useVirtualizer } from '@tanstack/vue-virtual'
-import { debounceFilter, useStorage } from '@vueuse/core'
+import { debounceFilter } from '@vueuse/core'
 import { twMerge } from 'tailwind-merge'
 import { computed, h, ref, type VNode } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -343,7 +353,7 @@ const columns: ColumnDef<Connection>[] = [
             const connection = row.original
 
             e.stopPropagation()
-            disconnectByIdAPI(connection.id)
+            disconnectByIdAPI(connection.id).catch(notifyRequestError)
           },
         },
         [
@@ -362,7 +372,7 @@ const columns: ColumnDef<Connection>[] = [
               const connection = row.original
 
               e.stopPropagation()
-              blockConnectionByIdAPI(connection.id)
+              blockConnectionByIdAPI(connection.id).catch(notifyRequestError)
             },
           },
           [

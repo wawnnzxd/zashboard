@@ -18,8 +18,9 @@ import {
   getNetworkTypeFromConnection,
 } from '@/helper'
 import { toSearchRegex } from '@/helper/search'
+import { useStorage } from '@/helper/storage'
 import type { Connection } from '@/types'
-import { useStorage, watchOnce } from '@vueuse/core'
+import { watchOnce } from '@vueuse/core'
 import dayjs from 'dayjs'
 import { computed, ref, shallowRef, watch } from 'vue'
 import { initAggregatedDataMap, saveConnectionHistory } from './connHistory'
@@ -83,11 +84,7 @@ export const uploadTotal = ref(0)
 let cancel: (() => void) | undefined
 
 export const initConnections = () => {
-  cancel?.()
-  activeConnections.value = []
-  closedConnections.value = []
-  downloadTotal.value = 0
-  uploadTotal.value = 0
+  stopConnections()
   // 暂停是「这一次浏览」的状态,不是跨会话的偏好:切后端/编辑后端/401 重登后若不复位,
   // 新会话的每一拍都会被旧的暂停态挡在门外,连接页永远空列表、用户以为新后端挂了。
   isPaused.value = false
@@ -124,7 +121,8 @@ export const initConnections = () => {
           const start = dayjs(getConnectionStart(conn))
 
           if (now.diff(start, 'minute') > autoDisconnectIdleUDPTime.value) {
-            disconnectByIdAPI(conn.id)
+            // 后台自动清理,不是用户点的,失败不打扰
+            disconnectByIdAPI(conn.id).catch(() => {})
           }
         })
     })
@@ -139,9 +137,18 @@ export const initConnections = () => {
   }
 }
 
+// 结束连接流并丢弃数据。两件事必须一起做:展示层的字段访问器按「当前后端」路由
+// (assembly/connections 的 backend()),而 clash 与 sing-box 的连接原始形状不同。
+// 上一个后端的连接只要活过后端切换的那一帧,就会被新后端的访问器读取 —— 取到
+// undefined 后渲染函数直接抛错,表格的 vnode 树就此损坏,之后新后端的数据正常
+// 流入也不再重绘,只能刷新页面。所以清空要与切换同步发生,不能等新流建起来。
 export const stopConnections = () => {
   cancel?.()
   cancel = undefined
+  activeConnections.value = []
+  closedConnections.value = []
+  downloadTotal.value = 0
+  uploadTotal.value = 0
 }
 
 const isDesc = computed(() => {

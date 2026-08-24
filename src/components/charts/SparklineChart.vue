@@ -20,7 +20,7 @@ const props = withDefaults(
   defineProps<{
     data: ChartPoint[]
     yAxisFloor?: number
-    color?: 'primary' | 'info'
+    color?: 'primary' | 'secondary'
     name?: string
     windowSeconds?: number
     labelFormatter?: (value: number) => string
@@ -38,8 +38,11 @@ const { colors, fontFamily } = useChartTheme(chartRef)
 
 // 静态骨架:仅初始化与主题/字体变化时下发;每拍数据走下方 dataOptions
 const options = computed<EChartOption>(() => {
-  const lineColor = props.color === 'info' ? colors.info60 : colors.primary60
-  const areaColor = props.color === 'info' ? colors.info30 : colors.primary30
+  // 只取颜色:时间窗(latest)属于每拍数据,已在下方 dataOptions 里算,
+  // 放进静态骨架会让骨架跟着 props.data 每拍重算,正好抵消静态/数据拆分。
+  const lineColor = props.color === 'secondary' ? colors.seriesSecondary : colors.seriesPrimary
+  const areaColor =
+    props.color === 'secondary' ? colors.seriesSecondaryMuted : colors.seriesPrimaryMuted
 
   return {
     animationDurationUpdate: 1000,
@@ -49,12 +52,12 @@ const options = computed<EChartOption>(() => {
       ? {
           show: true,
           trigger: 'axis',
-          backgroundColor: colors.base70,
-          borderColor: colors.base70,
+          backgroundColor: colors.surface,
+          borderColor: colors.surface,
           confine: true,
           padding: [0, 5],
           textStyle: {
-            color: colors.baseContent,
+            color: colors.text,
             fontFamily: fontFamily.value,
             fontSize: 11,
           },
@@ -80,7 +83,7 @@ const options = computed<EChartOption>(() => {
             show: true,
             inside: false,
             fontSize: 9,
-            color: colors.baseContent60,
+            color: colors.textMuted,
             fontFamily: fontFamily.value,
             margin: 4,
             formatter: (value: number) => (value === 0 ? '' : props.labelFormatter!(value)),

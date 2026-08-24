@@ -2,7 +2,7 @@
   <div class="base-container w-full backdrop-blur-none!">
     <!-- Header -->
     <div
-      class="need-blur flex items-center justify-between p-4 max-sm:flex-col max-sm:items-start max-sm:gap-2"
+      class="surface flex items-center justify-between p-4 max-sm:flex-col max-sm:items-start max-sm:gap-2"
     >
       <div
         class="text-base-content/60 flex items-center gap-2 text-xs font-semibold tracking-wider uppercase"
@@ -26,48 +26,39 @@
       >
         <div class="flex items-center gap-2">
           <span class="text-base-content/60 text-xs">{{ $t('aggregateBy') }}</span>
-          <select
+          <SelectInput
             v-model="aggregationType"
             class="select select-bordered select-sm w-32"
-          >
-            <option :value="ConnectionHistoryType.SourceIP">
-              {{ $t('aggregateBySourceIP') }}
-            </option>
-            <option :value="ConnectionHistoryType.Destination">
-              {{ $t('aggregateByDestination') }}
-            </option>
-            <option :value="ConnectionHistoryType.Process">{{ $t('aggregateByProcess') }}</option>
-            <option :value="ConnectionHistoryType.Outbound">
-              {{ $t('aggregateByOutbound') }}
-            </option>
-            <option :value="ConnectionHistoryType.ProxyGroup">
-              {{ $t('aggregateByProxyGroup') }}
-            </option>
-          </select>
+            :options="[
+              { value: ConnectionHistoryType.SourceIP, label: $t('aggregateBySourceIP') },
+              {
+                value: ConnectionHistoryType.Destination,
+                label: $t('aggregateByDestination'),
+              },
+              { value: ConnectionHistoryType.Process, label: $t('aggregateByProcess') },
+              { value: ConnectionHistoryType.Outbound, label: $t('aggregateByOutbound') },
+              { value: ConnectionHistoryType.ProxyGroup, label: $t('aggregateByProxyGroup') },
+            ]"
+          />
         </div>
         <div class="flex items-center gap-2">
           <span class="text-base-content/60 text-xs">{{ $t('autoCleanupInterval') }}</span>
-          <select
+          <SelectInput
             v-model="autoCleanupInterval"
             class="select select-bordered select-sm w-28"
-          >
-            <option :value="AutoCleanupInterval.Never">
-              {{ $t('autoCleanupIntervalNever') }}
-            </option>
-            <option :value="AutoCleanupInterval.Week">{{ $t('autoCleanupIntervalWeek') }}</option>
-            <option :value="AutoCleanupInterval.Month">
-              {{ $t('autoCleanupIntervalMonth') }}
-            </option>
-            <option :value="AutoCleanupInterval.Quarter">
-              {{ $t('autoCleanupIntervalQuarter') }}
-            </option>
-          </select>
+            :options="[
+              { value: AutoCleanupInterval.Never, label: $t('autoCleanupIntervalNever') },
+              { value: AutoCleanupInterval.Week, label: $t('autoCleanupIntervalWeek') },
+              { value: AutoCleanupInterval.Month, label: $t('autoCleanupIntervalMonth') },
+              { value: AutoCleanupInterval.Quarter, label: $t('autoCleanupIntervalQuarter') },
+            ]"
+          />
         </div>
       </div>
     </div>
 
     <!-- Stats grid -->
-    <div class="need-blur grid grid-cols-2 gap-3 px-4 pb-4 sm:grid-cols-5">
+    <div class="surface grid grid-cols-2 gap-3 px-4 pb-4 sm:grid-cols-5">
       <div class="bg-base-200/30 flex flex-col gap-1.5 rounded-xl p-4">
         <div class="text-base-content/60 text-xs font-semibold tracking-wider uppercase">
           {{ aggregateSourceLabel }}
@@ -146,8 +137,8 @@
                 height: `${virtualRow.size}px`,
                 transform: `translateY(${virtualRow.start - index * virtualRow.size}px)`,
               }"
-              class="hover:bg-primary! hover:text-primary-content whitespace-nowrap"
-              :class="virtualRow.index % 2 === 1 && 'bg-base-150'"
+              class="hover:bg-primary/85! hover:text-primary-content whitespace-nowrap"
+              :class="virtualRow.index % 2 === 1 && 'table-row-stripe'"
             >
               <td
                 v-for="cell in rows[virtualRow.index].getVisibleCells()"
@@ -198,13 +189,14 @@ import {
   clearConnectionHistory,
   historyStartTime,
 } from '@/store/connHistory'
-import { useStorage } from '@vueuse/core'
 </script>
 
 <script setup lang="ts">
 import { ConnectionHistoryType } from '@/helper/indexeddb'
+import SelectInput from '@/components/common/SelectInput.vue'
 import { showNotification } from '@/helper/notification'
 import { getIPLabelFromMap } from '@/helper/sourceip'
+import { useStorage } from '@/helper/storage'
 import { useTooltip } from '@/helper/tooltip'
 import { prettyBytesHelper } from '@/helper/utils'
 import { aggregateConnections, aggregatedDataMap, mergeAggregatedData } from '@/store/connHistory'
@@ -386,6 +378,7 @@ const virtualRows = computed(() => rowVirtualizer.value.getVirtualItems())
 const totalSize = computed(() => rowVirtualizer.value.getTotalSize() + 24)
 
 const showClearDialog = ref(false)
+
 const totalConnectionsTip = computed(() => {
   const dayjsTime = dayjs(historyStartTime.value)
 

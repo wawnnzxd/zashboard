@@ -50,20 +50,20 @@ const barData = computed(() =>
 const isEmpty = computed(() => barData.value.length === 0)
 
 const options = computed<EChartOption>(() => {
-  const barTopColor = props.type === 'hit' ? colors.primary30 : colors.info30
-  const barBottomColor = props.type === 'hit' ? colors.primary60 : colors.info60
+  const barTopColor = props.type === 'hit' ? colors.seriesPrimaryMuted : colors.seriesSecondaryMuted
+  const barBottomColor = props.type === 'hit' ? colors.seriesPrimary : colors.seriesSecondary
   const translationKey = props.type === 'hit' ? 'ruleHitCount' : 'ruleMissCount'
 
   return {
     tooltip: {
       trigger: 'axis',
       axisPointer: { type: 'shadow' },
-      backgroundColor: colors.base70,
-      borderColor: colors.base70,
+      backgroundColor: colors.surface,
+      borderColor: colors.surface,
       confine: true,
       padding: [8, 12],
       textStyle: {
-        color: colors.baseContent,
+        color: colors.text,
         fontFamily: fontFamily.value,
       },
       formatter: (params: unknown) => {
@@ -93,7 +93,7 @@ const options = computed<EChartOption>(() => {
       axisLine: { show: false },
       axisTick: { show: false },
       axisLabel: {
-        color: colors.baseContent,
+        color: colors.text,
         fontFamily: fontFamily.value,
       },
     },
@@ -105,11 +105,11 @@ const options = computed<EChartOption>(() => {
         show: true,
         lineStyle: {
           type: 'dashed',
-          color: colors.baseContent10,
+          color: colors.grid,
         },
       },
       axisLabel: {
-        color: colors.baseContent,
+        color: colors.text,
         fontFamily: fontFamily.value,
       },
     },
@@ -129,7 +129,7 @@ const options = computed<EChartOption>(() => {
           show: true,
           position: 'top',
           formatter: (params: { value: number }) => params.value,
-          color: colors.baseContent,
+          color: colors.text,
           fontFamily: fontFamily.value,
         },
         emphasis: {

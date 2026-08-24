@@ -1,4 +1,5 @@
 import { can, type Cap } from '@/assembly/backend'
+import { resolvePageTransition } from '@/composables/pageTransition'
 import { ROUTE_NAME } from '@/constant'
 import { renderRoutes } from '@/helper'
 import { i18n } from '@/i18n'
@@ -90,16 +91,7 @@ const setTitleByName = (name: string | symbol | undefined) => {
 }
 
 router.beforeEach((to, from) => {
-  const toIndex = renderRoutes.value.findIndex((item) => item === to.name)
-  const fromIndex = renderRoutes.value.findIndex((item) => item === from.name)
-
-  if (toIndex === 0 && fromIndex === renderRoutes.value.length - 1) {
-    to.meta.transition = 'slide-left'
-  } else if (toIndex === renderRoutes.value.length - 1 && fromIndex === 0) {
-    to.meta.transition = 'slide-right'
-  } else if (toIndex !== fromIndex) {
-    to.meta.transition = toIndex < fromIndex ? 'slide-right' : 'slide-left'
-  }
+  resolvePageTransition(to, from)
 
   if (!activeBackend.value && to.name !== ROUTE_NAME.setup) {
     router.push({ name: ROUTE_NAME.setup })

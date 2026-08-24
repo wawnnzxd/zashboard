@@ -29,32 +29,42 @@
     </div>
 
     <div class="mt-3 flex flex-col gap-3">
-      <!-- China IP -->
       <div>
-        <div class="text-base-content/60 text-xs">ipip.net</div>
-        <div class="mt-0.5 text-sm">
-          {{ showPrivacy ? ipForChina.ipWithPrivacy[0] : ipForChina.ip[0] }}
+        <SelectInput
+          v-model="ipCheckPrimaryAPI"
+          class="select-ghost select-xs h-6 min-h-6 w-auto border-0"
+          :aria-label="`${t('IPInfoAPI')} 1`"
+          :options="apiOptions"
+        />
+        <div class="mt-1 text-sm">
+          {{ showPrivacy ? ipCheckPrimaryResult.ipWithPrivacy[0] : ipCheckPrimaryResult.ip[0] }}
           <span
-            v-if="ipForChina.ip[1]"
+            v-if="ipCheckPrimaryResult.ip[1]"
             class="text-base-content/60 text-xs"
           >
-            ({{ showPrivacy ? ipForChina.ipWithPrivacy[1] : ipForChina.ip[1] }})
+            ({{ showPrivacy ? ipCheckPrimaryResult.ipWithPrivacy[1] : ipCheckPrimaryResult.ip[1] }})
           </span>
         </div>
       </div>
 
       <div class="border-base-content/5 border-t" />
 
-      <!-- Global IP -->
       <div>
-        <div class="text-base-content/60 text-xs">{{ IPInfoAPI }}</div>
-        <div class="mt-0.5 text-sm">
-          {{ showPrivacy ? ipForGlobal.ipWithPrivacy[0] : ipForGlobal.ip[0] }}
+        <SelectInput
+          v-model="ipCheckSecondaryAPI"
+          class="select-ghost select-xs h-6 min-h-6 w-auto border-0"
+          :aria-label="`${t('IPInfoAPI')} 2`"
+          :options="apiOptions"
+        />
+        <div class="mt-1 text-sm">
+          {{ showPrivacy ? ipCheckSecondaryResult.ipWithPrivacy[0] : ipCheckSecondaryResult.ip[0] }}
           <span
-            v-if="ipForGlobal.ip[1]"
+            v-if="ipCheckSecondaryResult.ip[1]"
             class="text-base-content/60 text-xs"
           >
-            ({{ showPrivacy ? ipForGlobal.ipWithPrivacy[1] : ipForGlobal.ip[1] }})
+            ({{
+              showPrivacy ? ipCheckSecondaryResult.ipWithPrivacy[1] : ipCheckSecondaryResult.ip[1]
+            }})
           </span>
         </div>
       </div>
@@ -63,10 +73,19 @@
 </template>
 
 <script setup lang="ts">
-import { fetchPublicIP, ipForChina, ipForGlobal } from '@/composables/publicIP'
+import SelectInput from '@/components/common/SelectInput.vue'
+import { getPublicIPInfo, type IPInfo } from '@/api/geoip'
+import {
+  ipCheckPrimaryResult,
+  ipCheckSecondaryResult,
+  MASKED_IP,
+  type IPCheckResult,
+} from '@/composables/overview'
+import { IP_INFO_API } from '@/constant'
 import { useTooltip } from '@/helper/tooltip'
-import { autoIPCheck, IPInfoAPI } from '@/store/settings'
+import { autoIPCheck, ipCheckPrimaryAPI, ipCheckSecondaryAPI } from '@/store/settings'
 import { BoltIcon, EyeIcon, EyeSlashIcon } from '@heroicons/vue/24/outline'
+import type { Ref } from 'vue'
 import { onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
@@ -78,20 +97,90 @@ const { showTip } = useTooltip()
 const handlerShowPrivacyTip = (e: Event) => {
   showTip(e, t('ipScreenshotTip'))
 }
+const apiOptions = Object.values(IP_INFO_API).map((value) => ({ value, label: value }))
 
-// 取数、单飞与打码都在 composables/publicIP.ts 里 —— 这里只负责「什么时候该取」。
-const getIPs = () => fetchPublicIP({ force: true })
+type Slot = 'primary' | 'secondary'
+const requestIDs: Record<Slot, number> = { primary: 0, secondary: 0 }
 
-watch(IPInfoAPI, () => {
-  if ([ipForChina, ipForGlobal].some((item) => item.value.ip.length !== 0)) {
-    getIPs()
-  }
+const queryingResult = (api: IP_INFO_API): IPCheckResult => ({
+  api,
+  ip: [t('getting'), ''],
+  ipWithPrivacy: [t('getting'), ''],
+  info: null,
 })
 
+const failedResult = (api: IP_INFO_API): IPCheckResult => ({
+  api,
+  ip: [t('testFailed'), ''],
+  ipWithPrivacy: [t('testFailed'), ''],
+  info: null,
+})
+
+const distinct = (values: string[]) => [
+  ...new Set(values.map((value) => value.trim()).filter(Boolean)),
+]
+
+const displayLabel = (info: IPInfo, api: IP_INFO_API) => {
+  if (api === IP_INFO_API.IPIP) {
+    return distinct([info.country, info.region, info.city, info.organization]).join(' ')
+  }
+
+  return distinct([info.country, info.organization]).join(' ') || info.ip
+}
+
+const successResult = (info: IPInfo, api: IP_INFO_API): IPCheckResult => {
+  const label = displayLabel(info, api)
+  const privateLabel = api === IP_INFO_API.IPIP ? `${info.country || '**'} ** ** **` : label
+
+  return {
+    api,
+    ipWithPrivacy: [label, info.ip],
+    ip: [privateLabel, MASKED_IP],
+    info,
+  }
+}
+
+const querySlot = async (slot: Slot, apiRef: Ref<IP_INFO_API>, resultRef: Ref<IPCheckResult>) => {
+  const api = apiRef.value
+  const requestID = ++requestIDs[slot]
+  resultRef.value = queryingResult(api)
+
+  try {
+    const info = await getPublicIPInfo(api)
+
+    if (requestID !== requestIDs[slot] || api !== apiRef.value) return
+    resultRef.value = successResult(info, api)
+  } catch {
+    if (requestID !== requestIDs[slot] || api !== apiRef.value) return
+    resultRef.value = failedResult(api)
+  }
+}
+
+const getIPs = () => {
+  void querySlot('primary', ipCheckPrimaryAPI, ipCheckPrimaryResult)
+  void querySlot('secondary', ipCheckSecondaryAPI, ipCheckSecondaryResult)
+}
+
+watch(ipCheckPrimaryAPI, () => void querySlot('primary', ipCheckPrimaryAPI, ipCheckPrimaryResult))
+watch(
+  ipCheckSecondaryAPI,
+  () => void querySlot('secondary', ipCheckSecondaryAPI, ipCheckSecondaryResult),
+)
+
 onMounted(() => {
-  // 不带 force:地球仪可能已经取过了,这里直接复用,不再重复请求同一个接口
-  if (autoIPCheck.value) {
-    fetchPublicIP()
+  if (!autoIPCheck.value) return
+
+  if (
+    ipCheckPrimaryResult.value.ip.length === 0 ||
+    ipCheckPrimaryResult.value.api !== ipCheckPrimaryAPI.value
+  ) {
+    void querySlot('primary', ipCheckPrimaryAPI, ipCheckPrimaryResult)
+  }
+  if (
+    ipCheckSecondaryResult.value.ip.length === 0 ||
+    ipCheckSecondaryResult.value.api !== ipCheckSecondaryAPI.value
+  ) {
+    void querySlot('secondary', ipCheckSecondaryAPI, ipCheckSecondaryResult)
   }
 })
 </script>

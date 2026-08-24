@@ -1,8 +1,8 @@
-import { SETTINGS_CATEGORIES } from '@/config/settingsItems'
+import { DEFAULT_SETTINGS_MENU_ORDER } from '@/config/settingsItems'
 import {
   ALL_THEME,
-  CONNECTIONS_TABLE_ACCESSOR_KEY,
   CONNECTION_DISPLAY_STYLE,
+  CONNECTIONS_TABLE_ACCESSOR_KEY,
   DETAILED_CARD_STYLE,
   EMOJIS,
   FOLDER_MODE,
@@ -27,9 +27,9 @@ import {
   TEST_URL,
   type THEME,
 } from '@/constant'
+import { useStorage } from '@/helper/storage'
 import { getMinCardWidth, isMiddleScreen, isPreferredDark } from '@/helper/utils'
 import type { SourceIPLabel } from '@/types'
-import { useStorage } from '@vueuse/core'
 import { computed } from 'vue'
 
 /**
@@ -116,6 +116,39 @@ const migrateLegacyConnectionDisplayStyle = () => {
 
 migrateLegacyConnectionDisplayStyle()
 
+const migrateIPAPISettings = () => {
+  if (typeof window === 'undefined') {
+    return
+  }
+
+  const globalAPI = localStorage.getItem('config/geoip-info-api')
+  const secondaryKey = 'config/ip-check-secondary-api'
+
+  if (
+    localStorage.getItem(secondaryKey) === null &&
+    globalAPI !== IP_INFO_API.IPIP &&
+    Object.values(IP_INFO_API).includes(globalAPI as IP_INFO_API)
+  ) {
+    localStorage.setItem(secondaryKey, globalAPI as string)
+  }
+
+  const legacyEarthKey = 'config/earth-origin-source'
+  const earthKey = 'config/earth-ip-info-api'
+  const legacyEarthSource = localStorage.getItem(legacyEarthKey)
+
+  if (localStorage.getItem(earthKey) === null) {
+    if (legacyEarthSource === 'china') {
+      localStorage.setItem(earthKey, IP_INFO_API.IPIP)
+    } else if (legacyEarthSource === 'global') {
+      localStorage.setItem(earthKey, IP_INFO_API.IPSB)
+    }
+  }
+
+  localStorage.removeItem(legacyEarthKey)
+}
+
+migrateIPAPISettings()
+
 // global
 export const defaultTheme = useStorage<string>('config/default-theme', 'desire')
 export const darkTheme = useStorage<string>('config/dark-theme', 'desire-dark')
@@ -129,8 +162,16 @@ export const theme = computed(() => {
 export const customThemes = useStorage<THEME[]>('config/custom-themes', [])
 
 const replaceLegacyTheme = (theme: string, defaultTheme: string) => {
-  if (theme === 'dark-apple') {
-    return 'dark'
+  const legacyThemeReplacements: Record<string, string> = {
+    'dark-apple': 'dark',
+    lofi: 'light',
+    wireframe: 'light',
+    black: 'dark-neutral',
+    business: 'dark-neutral',
+  }
+
+  if (theme in legacyThemeReplacements) {
+    return legacyThemeReplacements[theme]
   }
   if ([...ALL_THEME, ...customThemes.value.map((theme) => theme.name)].includes(theme)) {
     return theme
@@ -138,8 +179,17 @@ const replaceLegacyTheme = (theme: string, defaultTheme: string) => {
   return defaultTheme
 }
 
-defaultTheme.value = replaceLegacyTheme(defaultTheme.value, 'desire')
-darkTheme.value = replaceLegacyTheme(darkTheme.value, 'desire-dark')
+// 仅在确实需要迁移时才写回:useStorage 现在是 writeDefaults:false,没写过就读代码里的
+// 默认值 —— 无脑写回等于把「当下的默认主题」钉死进老用户的 localStorage,
+// 以后我们再换默认主题(desire → 下一版)对他们就不生效了。
+const migratedDefaultTheme = replaceLegacyTheme(defaultTheme.value, 'desire')
+if (migratedDefaultTheme !== defaultTheme.value) {
+  defaultTheme.value = migratedDefaultTheme
+}
+const migratedDarkTheme = replaceLegacyTheme(darkTheme.value, 'desire-dark')
+if (migratedDarkTheme !== darkTheme.value) {
+  darkTheme.value = migratedDarkTheme
+}
 
 export const language = useStorage<LANG>(
   'config/language',
@@ -188,7 +238,10 @@ export const disablePullToRefresh = useStorage('config/disable-pull-to-refresh',
 export const displayAllFeatures = useStorage('config/display-all-features', false)
 export const blurIntensity = useStorage('config/blur-intensity', 10)
 export const scrollAnimationEffect = useStorage('config/scroll-animation-effect', true)
-export const IPInfoAPI = useStorage('config/geoip-info-api', IP_INFO_API.IPSB)
+export const IPInfoAPI = useStorage<IP_INFO_API>('config/geoip-info-api', IP_INFO_API.IPSB)
+if (IPInfoAPI.value === IP_INFO_API.IPIP) {
+  IPInfoAPI.value = IP_INFO_API.IPSB
+}
 export const geoipCountryDatabaseURL = useStorage(
   'config/geoip-country-database-url',
   GEOIP_COUNTRY_DATABASE_URL,
@@ -204,6 +257,14 @@ export const keyboardShortcuts = useStorage<Record<string, string>>('config/keyb
 // overview
 export const splitOverviewPage = useStorage('config/split-overview-page', false)
 export const autoIPCheck = useStorage('config/auto-ip-check', true)
+export const ipCheckPrimaryAPI = useStorage<IP_INFO_API>(
+  'config/ip-check-primary-api',
+  IP_INFO_API.IPIP,
+)
+export const ipCheckSecondaryAPI = useStorage<IP_INFO_API>(
+  'config/ip-check-secondary-api',
+  IP_INFO_API.IPSB,
+)
 export const autoConnectionCheck = useStorage('config/auto-connection-check', true)
 export const showStatisticsWhenSidebarCollapsed = useStorage(
   'config/show-statistics-when-sidebar-collapsed',
@@ -256,10 +317,7 @@ export const overviewCardOrder = useOrderedStorage(
       : order.length,
 )
 
-export const earthOriginSource = useStorage<'global' | 'china'>(
-  'config/earth-origin-source',
-  'china',
-)
+export const earthIPInfoAPI = useStorage<IP_INFO_API>('config/earth-ip-info-api', IP_INFO_API.IPIP)
 export const earthVisualMode = useStorage<'flat' | 'space'>('config/earth-visual-mode', 'flat')
 export const topologyApplyConnectionFilter = useStorage(
   'config/topology-apply-connection-filter',
@@ -385,6 +443,7 @@ export const connectionCardLines = useStorage<CONNECTIONS_TABLE_ACCESSOR_KEY[][]
 )
 
 export const sourceIPLabelList = useStorage<SourceIPLabel[]>('config/source-ip-label-list', [])
+export const resolveClientHostname = useStorage('config/resolve-client-hostname', false)
 
 // rules
 export const displayNowNodeInRule = useStorage('config/display-now-node-in-rule', true)
@@ -415,9 +474,6 @@ export const hiddenSettingsItems = useStorage<Record<string, boolean>>(
 // 存储设置菜单项的顺序
 export const settingsMenuOrder = useOrderedStorage<SETTINGS_MENU_KEY>(
   'config/settings-menu-order',
-  () => SETTINGS_CATEGORIES.map((category) => category.key),
+  () => [...DEFAULT_SETTINGS_MENU_ORDER],
   (key) => key,
 )
-
-// settings page two columns mode
-export const settingsPageTwoColumns = useStorage<boolean>('config/settings-page-two-columns', true)

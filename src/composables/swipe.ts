@@ -1,6 +1,7 @@
 import { proxiesTabShow, proxyProviederList } from '@/assembly/proxies'
 import { ruleProviderList, rulesTabShow } from '@/assembly/rules'
 import { openDialogCount } from '@/composables/dialog'
+import { useSettingsSection } from '@/composables/settingsSection'
 import { CONNECTION_TAB_TYPE, PROXY_TAB_TYPE, ROUTE_NAME, RULE_TAB_TYPE } from '@/constant'
 import { renderRoutes } from '@/helper'
 import { isMiddleScreen } from '@/helper/utils'
@@ -76,6 +77,7 @@ export const useSwipeRouter = () => {
   const swiperRef = ref<HTMLElement | null>(null)
   const route = useRoute()
   const router = useRouter()
+  const { isSettingsSubPage, exitSection } = useSettingsSection()
 
   const swipeList = computed(() => {
     return flatten(
@@ -86,7 +88,7 @@ export const useSwipeRouter = () => {
               return [
                 () => route.name === ROUTE_NAME.proxies && proxiesTabShow.value === tab,
                 () => {
-                  router.push({ name: ROUTE_NAME.proxies, replace: true })
+                  router.push({ name: ROUTE_NAME.proxies })
                   proxiesTabShow.value = tab
                 },
               ]
@@ -96,7 +98,7 @@ export const useSwipeRouter = () => {
               return [
                 () => route.name === ROUTE_NAME.connections && connectionTabShow.value === tab,
                 () => {
-                  router.push({ name: ROUTE_NAME.connections, replace: true })
+                  router.push({ name: ROUTE_NAME.connections })
                   connectionTabShow.value = tab
                 },
               ]
@@ -106,7 +108,7 @@ export const useSwipeRouter = () => {
               return [
                 () => route.name === ROUTE_NAME.rules && rulesTabShow.value === tab,
                 () => {
-                  router.push({ name: ROUTE_NAME.rules, replace: true })
+                  router.push({ name: ROUTE_NAME.rules })
                   rulesTabShow.value = tab
                 },
               ]
@@ -114,7 +116,7 @@ export const useSwipeRouter = () => {
           }
         }
 
-        return [[() => route.name === r, () => router.push({ name: r, replace: true })]]
+        return [[() => route.name === r, () => router.push({ name: r })]]
       }),
     )
   })
@@ -127,7 +129,7 @@ export const useSwipeRouter = () => {
     const routeName = route.name as ROUTE_NAME
 
     if (routeName === ROUTE_NAME.setup) {
-      return router.push({ name: ROUTE_NAME.proxies, replace: true })
+      return router.push({ name: ROUTE_NAME.proxies })
     }
 
     return swipeList.value[(getNextIndexInSwipeList() + 1) % swipeList.value.length]?.[1]?.()
@@ -136,7 +138,7 @@ export const useSwipeRouter = () => {
     const routeName = route.name as ROUTE_NAME
 
     if (routeName === ROUTE_NAME.setup) {
-      return router.push({ name: ROUTE_NAME.proxies, replace: true })
+      return router.push({ name: ROUTE_NAME.proxies })
     }
 
     return swipeList.value[
@@ -228,6 +230,13 @@ export const useSwipeRouter = () => {
     resetGesture()
 
     if (!isHorizontal || !canSwipeNow()) return
+
+    // 设置的二级页面盖在分类列表上,这里的手势语义是"返回"而不是换顶级页面。
+    // PWA 下没有浏览器自带的边缘返回手势来吞掉这个滑动,不拦就会飞到隔壁页面去。
+    if (isSettingsSubPage.value) {
+      if (swipeDirection === 'right') exitSection()
+      return
+    }
 
     if (swipeDirection === 'right') {
       getPrevRouteName()

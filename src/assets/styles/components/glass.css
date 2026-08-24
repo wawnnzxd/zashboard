@@ -10,7 +10,7 @@
  *   表面(card/collapse/base-container/settings-grid) —— 身后只有静态环境光晕。
  *     模糊一片平滑渐变得到的还是那片渐变,所以**半透明填充=真玻璃的观感**,
  *     不付 backdrop-filter 的合成层代价。这不是省钱,是同效果的更优实现。
- *   镶边(ctrls-bar/sidebar/dock/modal/toast) —— 内容真的会从下面滚过,
+ *   镶边(ctrls-bar/sidebar/dock/modal/app-toast) —— 内容真的会从下面滚过,
  *     必须真 blur+saturate 才成立;同屏至多几层,代价固定且可控。
  */
 
@@ -115,8 +115,9 @@
   box-shadow: var(--shadow-float), var(--glass-highlight);
 }
 
-/* toast:彩色语义款(error/warning/…)保持实色语义,默认款上玻璃 */
-.toast .alert:not(.alert-error, .alert-warning, .alert-success, .alert-info) {
+/* toast:上游 3.20 换成了 .app-toast(左侧状态色条 + 图标承担语义,底色不再分语义款),
+   于是这里对所有 toast 统一上玻璃,语义色由 --toast-accent 表达,不再按类型分叉。 */
+.app-toast {
   background-color: var(--glass-chrome);
   -webkit-backdrop-filter: blur(18px) saturate(170%);
   backdrop-filter: blur(18px) saturate(170%);
@@ -159,7 +160,7 @@
   .ctrls-bar,
   .modal-box,
   .dock,
-  .toast .alert {
+  .app-toast {
     background-color: var(--color-base-100);
     -webkit-backdrop-filter: none;
     backdrop-filter: none;

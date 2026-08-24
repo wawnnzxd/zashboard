@@ -13,9 +13,9 @@ import {
   saveConnectionHistoryToIndexedDB,
   type ConnectionHistoryData,
 } from '@/helper/indexeddb'
+import { useStorage } from '@/helper/storage'
 import type { Connection } from '@/types'
 import ipaddr from 'ipaddr.js'
-import { useStorage } from '@vueuse/core'
 import { shallowRef } from 'vue'
 import { activeBackend } from './setup'
 
@@ -496,9 +496,13 @@ export const autoCleanupInterval = useStorage<AutoCleanupInterval>(
 
 // 起始时间刻意留在 cache/(不随设置同步):它描述的是本机 IndexedDB 里这份历史从何时开始
 // 攒的,换台设备本来就是空表、从零计时才对;跟着设置同步过去反而会拿别人的时钟裁本机数据。
+// 与其他纯偏好不同,这个时间戳必须首次访问就落盘(useStorage 现在默认 writeDefaults:false):
+// 不写盘的话每次刷新都读到「此刻」,自动清理的到期判断永远不成立。
 export const historyStartTime = useStorage<number>(
   'cache/connection-history-stats-start-time',
   Date.now(),
+  undefined,
+  { writeDefaults: true },
 )
 
 const CLEANUP_INTERVAL_MS: Record<AutoCleanupInterval, number> = {

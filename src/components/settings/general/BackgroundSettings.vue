@@ -1,11 +1,14 @@
 <template>
-  <SettingItem :setting-key="k.customBackgroundURL">
-    <div class="setting-item-label">
+  <SettingItem
+    :setting-key="k.customBackgroundURL"
+    class="max-sm:flex-wrap max-sm:py-3"
+  >
+    <div class="setting-item-label max-sm:w-full max-sm:flex-none">
       {{ $t('customBackgroundURL') }}
     </div>
-    <div class="join">
+    <div class="join min-w-0 flex-1">
       <TextInput
-        class="join-item w-38"
+        class="join-item min-w-0 flex-1"
         v-model="customBackgroundURL"
         :clearable="true"
         @update:modelValue="handlerBackgroundURLChange"

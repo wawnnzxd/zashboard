@@ -4,27 +4,15 @@
       to="body"
       :disabled="!isFullScreen"
     >
-      <!-- custom-background / custom-blur 必须与 App.vue 的守卫保持一致:没有背景图时
+      <!-- custom-background 必须与 App.vue 的守卫保持一致:没有背景图时
            alpha 规则只是把元素混成同色不透明底、模糊的是一片纯色,视觉产出为零,
            却让里面每个 .card/.base-container/.table thead 都被提升为独立合成层逐帧快照 -->
       <div
         :class="
           isFullScreen
             ? [
-                'bg-base-100 fixed inset-0 z-[9999] flex h-screen w-screen flex-col p-4',
-                backgroundImage && 'custom-background bg-cover bg-center',
-                backgroundImage && blurIntensity > 0 ? 'custom-blur' : '',
-              ]
-            : undefined
-        "
-        :style="
-          isFullScreen
-            ? [
-                backgroundImage,
-                {
-                  '--dashboard-alpha': `${dashboardTransparent}%`,
-                  '--blur-px': `${blurIntensity}px`,
-                },
+                'bg-base-100 fixed inset-0 z-[9999] flex h-screen w-screen flex-col bg-cover bg-center p-4',
+                backgroundImage && 'custom-background',
               ]
             : undefined
         "
@@ -116,11 +104,7 @@ import { backgroundImage } from '@/helper/indexeddb'
 import { getIPLabelFromMap } from '@/helper/sourceip'
 import { isMiddleScreen } from '@/helper/utils'
 import { activeConnections, filteredActiveConnections } from '@/store/connections'
-import {
-  blurIntensity,
-  dashboardTransparent,
-  topologyApplyConnectionFilter,
-} from '@/store/settings'
+import { topologyApplyConnectionFilter } from '@/store/settings'
 import {
   ArrowsPointingInIcon,
   ArrowsPointingOutIcon,
@@ -162,9 +146,10 @@ const chartSurfaceStyle = computed<CSSProperties>(() => {
   }
 
   // 同上:没有背景图时模糊的是纯色,而显式的 backdrop-filter(哪怕 blur(0px))
-  // 一样会强制建合成层 —— 只有真有图且真要模糊时才下发
-  if (backgroundImage.value && blurIntensity.value > 0) {
-    style.backdropFilter = `blur(${blurIntensity.value}px)`
+  // 一样会强制建合成层 —— 只有真有图时才下发。强度为 0 时 --app-glass 自身即 none,
+  // 那一档由 useAppearanceVars 兜住,这里只管「有没有图」。
+  if (backgroundImage.value) {
+    style.backdropFilter = 'var(--app-glass, none)'
   }
 
   if (!shouldRotate.value) return style
@@ -230,15 +215,15 @@ const options = computed<EChartOption>(() => ({
   backgroundColor: 'transparent',
   textStyle: {
     fontFamily: fontFamily.value || 'inherit',
-    color: colors.baseContent,
+    color: colors.text,
   },
   tooltip: {
     trigger: 'item',
     triggerOn: 'mousemove',
-    backgroundColor: colors.base70,
-    borderColor: colors.baseContent30,
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
     textStyle: {
-      color: colors.baseContent,
+      color: colors.text,
     },
     formatter: (params: unknown) => {
       const { dataType, data } = params as {
@@ -294,7 +279,7 @@ const options = computed<EChartOption>(() => ({
         borderWidth: 0,
       },
       label: {
-        color: colors.baseContent,
+        color: colors.text,
         fontSize: isMiddleScreen.value ? 10 : 12,
         formatter: (params: { name: string }) => {
           const maxLength = isFullScreen.value ? 45 : isMiddleScreen.value ? 20 : 30

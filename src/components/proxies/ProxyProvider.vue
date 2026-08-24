@@ -61,10 +61,7 @@
       <ProxyPreview :nodes="renderProxies" />
     </template>
     <template v-slot:content>
-      <ProxiesContent
-        :name="name"
-        :render-proxies="renderProxies"
-      />
+      <ProxiesContent :render-proxies="renderProxies" />
     </template>
   </CollapseCard>
 </template>
@@ -73,6 +70,7 @@
 import { proxyProviderHealthCheckAPI, updateProxyProviderAPI } from '@/assembly/proxies'
 import { useBounceOnVisible } from '@/composables/bouncein'
 import { useRenderProxyList } from '@/composables/renderProxies'
+import { notifyRequestError } from '@/helper/requestError'
 import { fromNow, prettyBytesHelper } from '@/helper/utils'
 import { fetchProxies } from '@/assembly/proxies'
 import { proxyProviederList } from '@/assembly/proxies'
@@ -146,8 +144,9 @@ const healthCheckClickHandler = async () => {
   try {
     await proxyProviderHealthCheckAPI(props.name)
     await fetchProxies()
-    isHealthChecking.value = false
-  } catch {
+  } catch (e) {
+    notifyRequestError(e)
+  } finally {
     isHealthChecking.value = false
   }
 }
@@ -159,8 +158,9 @@ const updateProviderClickHandler = async () => {
   try {
     await updateProxyProviderAPI(props.name)
     await fetchProxies()
-    isUpdating.value = false
-  } catch {
+  } catch (e) {
+    notifyRequestError(e)
+  } finally {
     isUpdating.value = false
   }
 }

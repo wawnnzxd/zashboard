@@ -58,6 +58,8 @@ export const toggleRuleDisabledWithSideEffects = async (rule: Rule) => {
       return ruleTypeMatches && rulePayloadMatches
     })
 
+    // 顺带动作,失败不该盖掉「规则已禁用」这件主事;并发上限在 disconnectConnections 内,
+    // 命中几千条的规则不能一次把几千个请求全甩给后端。
     await disconnectConnections(matchingConnections, activeConnections.value.length)
   }
 }

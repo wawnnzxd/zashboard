@@ -8,15 +8,16 @@
         {{ t('earthGlobeTitle') }}
       </div>
       <div class="flex items-center gap-1">
-        <select
+        <SelectInput
           v-model="earthVisualMode"
           class="select select-ghost select-sm h-8 min-h-8 w-auto border-0"
           :aria-label="t('earthVisualStyle')"
           :title="t('earthVisualStyle')"
-        >
-          <option value="space">{{ t('earthVisualStyle_space') }}</option>
-          <option value="flat">{{ t('earthVisualStyle_flat') }}</option>
-        </select>
+          :options="[
+            { value: 'space', label: t('earthVisualStyle_space') },
+            { value: 'flat', label: t('earthVisualStyle_flat') },
+          ]"
+        />
         <button
           class="btn btn-ghost btn-sm btn-square"
           :aria-label="t(showCityLabels ? 'earthHideCityLabels' : 'earthShowCityLabels')"
@@ -81,14 +82,12 @@
       />
 
       <div class="pointer-events-none absolute top-2 right-2 left-2 flex flex-wrap gap-1.5 text-xs">
-        <select
-          v-model="earthOriginSource"
+        <SelectInput
+          v-model="earthIPInfoAPI"
           class="select select-sm bg-base-100/75 pointer-events-auto h-8 min-h-8 w-auto rounded-lg border-0 shadow backdrop-blur-md"
           :aria-label="t('earthOriginAPI')"
-        >
-          <option value="china">ipip.info</option>
-          <option value="global">ip.sb</option>
-        </select>
+          :options="apiOptions"
+        />
 
         <div
           class="bg-base-100/75 pointer-events-auto flex h-8 items-center gap-1.5 rounded-lg px-2 shadow backdrop-blur-md"
@@ -305,12 +304,14 @@
 </template>
 
 <script setup lang="ts">
-import { awaitPublicIP, fetchPublicIP } from '@/composables/publicIP'
+import SelectInput from '@/components/common/SelectInput.vue'
+import { getPublicIPInfo, type IPInfo } from '@/api/geoip'
+import { getCachedPublicIPInfo, MASKED_IP } from '@/composables/overview'
+import { IP_INFO_API } from '@/constant'
 import { themeColorScheme } from '@/helper/theme'
 import { prettyBytesHelper } from '@/helper/utils'
 import { activeConnections } from '@/store/connections'
-import { MASKED_IP } from '@/composables/publicIP'
-import { earthOriginSource, earthVisualMode, language, theme } from '@/store/settings'
+import { earthIPInfoAPI, earthVisualMode, language, theme } from '@/store/settings'
 import {
   ArrowPathIcon,
   ArrowsPointingInIcon,
@@ -332,6 +333,7 @@ import {
   DBIP_COMPRESSED_BYTES,
   type EarthEndpointInfo,
   type EarthLocation,
+  type EarthLocationHint,
   type GeoDatabaseError,
   type GeoDatabaseStatus,
   type GeoWorkerRequest,
@@ -340,6 +342,7 @@ import {
 import type { EarthRenderer } from './earth/earthRenderer'
 
 const { t } = useI18n()
+const apiOptions = Object.values(IP_INFO_API).map((value) => ({ value, label: value }))
 const canvasRef = ref<HTMLElement>()
 const renderer = shallowRef<EarthRenderer>()
 const rendererError = ref('')
@@ -349,6 +352,7 @@ const recoveredCorruptCache = ref(false)
 const downloadedBytes = ref(0)
 const downloadTotalBytes = ref(DBIP_COMPRESSED_BYTES)
 const originIP = ref('')
+const originAPIInfo = ref<IPInfo | null>(null)
 const originStatus = ref<'loading' | 'ready' | 'error'>('loading')
 // 默认显示真实 IP,理由同 IPCheck.vue 的 showPrivacy(本地私人面板,不对自己藏)
 const showOriginIP = ref(true)
@@ -387,7 +391,7 @@ let initIdleHandle: number | null = null
 
 const isValidIP = (value: string) => Boolean(value && ipaddr.isValid(value))
 
-// 与「网络信息」卡同一条打码规则(publicIP.ts):完全打码。
+// 与「网络信息」卡同一条打码规则(composables/overview.ts 的 MASKED_IP):完全打码。
 // 原实现保留前两段(119.98.*.*),同一个秘密在两张卡上两套口径,
 // 松的那套就是泄露 —— 前两段足以定位到城市级。
 const maskIP = (value: string) => (isValidIP(value) ? MASKED_IP : '—')
@@ -485,22 +489,42 @@ const refreshRoutes = async () => {
 
     routesLoading.value = true
     const snapshot = activeConnections.value
+    const routeOriginIP = originIP.value
+    const routeOriginRequestID = originRequestID
+    const preferredOrigin: EarthLocationHint | null =
+      earthIPInfoAPI.value !== IP_INFO_API.IPIP && originAPIInfo.value
+        ? {
+            latitude: originAPIInfo.value.latitude,
+            longitude: originAPIInfo.value.longitude,
+            city: originAPIInfo.value.city,
+            country: originAPIInfo.value.country,
+          }
+        : null
 
     try {
       const result = await buildEarthRoutes(
         snapshot,
-        originIP.value,
+        routeOriginIP,
         language.value,
         lookupLocations,
+        preferredOrigin,
       )
 
-      if (!disposed) {
+      if (
+        !disposed &&
+        routeOriginRequestID === originRequestID &&
+        routeOriginIP === originIP.value
+      ) {
         routeCount.value = result.routes.length
         if (result.origin) renderer.value?.setInitialLocation(result.origin)
         renderer.value?.setRoutes(result.routes)
       }
     } catch {
-      if (!disposed) {
+      if (
+        !disposed &&
+        routeOriginRequestID === originRequestID &&
+        routeOriginIP === originIP.value
+      ) {
         routeCount.value = 0
         renderer.value?.setRoutes([])
       }
@@ -525,41 +549,46 @@ const scheduleRouteRefresh = () => {
   }, 150)
 }
 
+// 隐藏期间攒下的那次刷新,回到可见时补上 —— 否则卡片一直停在滚出视口前的那份路由。
 watch([cardVisible, documentVisibility], () => {
   if (refreshPending && !isCardHidden()) scheduleRouteRefresh()
 })
 
-// 取公网 IP 这件事整体交给 composables/publicIP.ts:它自己会在需要时发起请求并单飞,
-// 所以这里既不需要「先等 2.5 秒看别人取到没有」(关掉自动检测 / 隐藏了「网络信息」卡 /
-// 那张卡已经失败过一次时,那 2.5 秒是纯白等),也不需要自己写回共享 ref(写回时用了
-// 与卡片不同的打码规则,把公网 IP 前两段泄进了本该完全打码的视图)。
 const loadOrigin = async (force = false) => {
   const requestID = ++originRequestID
-  const source = earthOriginSource.value
-  const stale = () => requestID !== originRequestID || source !== earthOriginSource.value
+  const api = earthIPInfoAPI.value
+  const cached = force ? null : getCachedPublicIPInfo(api)
 
-  originStatus.value = 'loading'
-  originIP.value = ''
-  routeCount.value = 0
-  renderer.value?.setRoutes([])
-
-  if (force) {
-    await fetchPublicIP({ force: true })
-  }
-
-  const ip = await awaitPublicIP(source)
-
-  if (disposed || stale()) return
-
-  if (!ip) {
-    originStatus.value = 'error'
-    originIP.value = ''
+  if (cached && isValidIP(cached.ip)) {
+    originIP.value = cached.ip
+    originAPIInfo.value = cached
+    originStatus.value = 'ready'
+    scheduleRouteRefresh()
     return
   }
 
-  originIP.value = ip
-  originStatus.value = 'ready'
-  scheduleRouteRefresh()
+  originStatus.value = 'loading'
+  originIP.value = ''
+  originAPIInfo.value = null
+  routeCount.value = 0
+  renderer.value?.setRoutes([])
+
+  try {
+    const result = await getPublicIPInfo(api)
+
+    if (!isValidIP(result.ip)) throw new Error('Invalid origin IP')
+    if (requestID !== originRequestID || api !== earthIPInfoAPI.value) return
+
+    originIP.value = result.ip
+    originAPIInfo.value = result
+    originStatus.value = 'ready'
+    scheduleRouteRefresh()
+  } catch {
+    if (requestID !== originRequestID || api !== earthIPInfoAPI.value) return
+    originStatus.value = 'error'
+    originIP.value = ''
+    originAPIInfo.value = null
+  }
 }
 
 const downloadDatabase = () => {
@@ -617,7 +646,7 @@ const handleKeydown = (event: KeyboardEvent) => {
 }
 
 watch(activeConnections, scheduleRouteRefresh)
-watch(earthOriginSource, () => void loadOrigin())
+watch(earthIPInfoAPI, () => void loadOrigin())
 watch(language, () => {
   locationCache.clear()
   scheduleRouteRefresh()

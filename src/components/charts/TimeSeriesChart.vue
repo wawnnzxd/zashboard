@@ -71,7 +71,7 @@ const options = computed<EChartOption>(() => {
       bottom: 0,
       data: seriesNames.value,
       textStyle: {
-        color: colors.baseContent,
+        color: colors.text,
         fontFamily: fontFamily.value,
         fontSize: 10,
       },
@@ -82,13 +82,13 @@ const options = computed<EChartOption>(() => {
     tooltip: {
       show: true,
       trigger: 'axis',
-      backgroundColor: colors.base70,
-      borderColor: colors.base70,
+      backgroundColor: colors.surface,
+      borderColor: colors.surface,
       borderRadius: 8,
       confine: true,
       padding: [0, 3],
       textStyle: {
-        color: colors.baseContent,
+        color: colors.text,
         fontFamily: fontFamily.value,
         fontSize: 11,
       },
@@ -102,7 +102,7 @@ const options = computed<EChartOption>(() => {
           splitLine: { show: false },
           axisLabel: {
             show: true,
-            color: colors.baseContent,
+            color: colors.text,
             fontFamily: fontFamily.value,
             fontSize: 10,
             formatter: (value: number) => (value < 0 ? '' : `${Math.round(value)} s`),
@@ -129,21 +129,22 @@ const options = computed<EChartOption>(() => {
         show: true,
         lineStyle: {
           type: 'dashed',
-          color: colors.baseContent10,
+          color: colors.grid,
         },
       },
       axisLabel: {
         formatter: props.labelFormatter,
-        color: colors.baseContent,
+        color: colors.text,
         fontFamily: fontFamily.value,
         fontSize: 10,
         ...(isSeconds ? {} : { align: 'left', padding: [0, 0, 0, -35] }),
       },
     },
+    // 骨架按稳定的系列名构建,不读 props.data:后者每拍换引用,骨架会跟着全量重建。
     series: seriesNames.value.map((name, index) => {
       const isLast = index === seriesNames.value.length - 1
-      const lineColor = isLast ? colors.primary60 : colors.info60
-      const areaColor = isLast ? colors.primary30 : colors.info30
+      const lineColor = isLast ? colors.seriesPrimary : colors.seriesSecondary
+      const areaColor = isLast ? colors.seriesPrimaryMuted : colors.seriesSecondaryMuted
 
       return {
         name,

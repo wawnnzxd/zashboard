@@ -3,9 +3,9 @@
 // store 直接引用这里导出的 logs / initLogs,不再参与组装。
 import { can, Channel, channel, core, Core } from '@/assembly/backend'
 import { LOG_LEVEL } from '@/constant'
+import { useStorage } from '@/helper/storage'
 import { activeBackend } from '@/store/setup'
 import type { LogWithSeq } from '@/types'
-import { useStorage } from '@vueuse/core'
 import { computed, ref, shallowRef, watch } from 'vue'
 import { createLogsAccumulator } from './accumulator'
 import * as clash from './clash'
@@ -59,8 +59,7 @@ const backend = () => {
 let cancel: (() => void) | undefined
 
 export const initLogs = () => {
-  cancel?.()
-  logs.value = []
+  stopLogs()
   // 暂停是「这一次浏览」的状态,不跨会话:切后端后若不复位,新会话的日志会被旧的暂停态
   // 一直挡在缓冲区里,日志页永远空白。
   isPaused.value = false
@@ -74,7 +73,11 @@ export const initLogs = () => {
   }
 }
 
+// 结束流时一并丢掉日志。日志形态在累加器里已经归一化,不会像连接那样把渲染打崩
+// (见 store/connections),但把上一个后端的日志留在屏幕上同样是错的 —— 新后端连不上时,
+// 它们会一直冒充新后端的日志。
 export const stopLogs = () => {
   cancel?.()
   cancel = undefined
+  logs.value = []
 }
