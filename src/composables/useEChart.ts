@@ -1,7 +1,7 @@
 import { gatedComputed, useVisibilityGate } from '@/composables/gatedComputed'
 import { themeColorScheme, type ThemeColorScheme } from '@/helper/theme'
 import { isMiddleScreen } from '@/helper/utils'
-import { emoji, font, theme } from '@/store/settings'
+import { emoji, font } from '@/store/settings'
 import { useElementSize } from '@vueuse/core'
 import { BarChart, LineChart, SankeyChart } from 'echarts/charts'
 import { GridComponent, LegendComponent, TooltipComponent } from 'echarts/components'
@@ -63,75 +63,20 @@ const CHART_COLOR_SCHEMES: Record<ThemeColorScheme, ChartTheme> = {
   },
 }
 
-// 上游 3.20 把颜色改成了写死的两套灰阶。我们保留探针方案:自定义主题(Desire 的
-// 紫粉渐变)下,写死的灰阶跟面板配色完全对不上,而探针是从实际计算样式里反读,
-// 主题、自定义主题、用户改配色,图表都自动跟着走。字段名沿用上游的新命名,
-// 这样上游后续改图表组件时不必再翻译一遍。
-//
-// 探针把 9 个颜色塞进一个元素的 9 个互不相干的属性里一次性读出:每个属性都接受
-// <color>,又都不影响布局(元素零尺寸且 hidden),比逐个建元素或解析 CSS 变量便宜。
-const createThemeProbe = () => {
-  const probe = document.createElement('span')
-  probe.className =
-    'border-b-primary/30 border-t-primary/60 border-l-info/30 border-r-info/60 text-base-content/10 bg-base-100/70 outline-base-content/30 decoration-base-content/60 caret-base-content'
-
-  Object.assign(probe.style, {
-    position: 'absolute',
-    width: '0',
-    height: '0',
-    overflow: 'hidden',
-    pointerEvents: 'none',
-    visibility: 'hidden',
-  })
-
-  return probe
-}
-
 export const useChartTheme = (chartRef: ChartElementRef) => {
-  // 先按当前明暗档给一套静态值开局,免得探针挂上之前那一帧读到空字符串。
   const colors = reactive<ChartTheme>({ ...CHART_COLOR_SCHEMES[themeColorScheme.value] })
   const fontFamily = ref('')
-  let probe: HTMLSpanElement | null = null
 
-  const update = () => {
-    if (!probe) return
-
-    const style = getComputedStyle(probe)
-    colors.seriesPrimaryMuted = style.borderBottomColor
-    colors.seriesPrimary = style.borderTopColor
-    colors.seriesSecondaryMuted = style.borderLeftColor
-    colors.seriesSecondary = style.borderRightColor
-    colors.grid = style.color
-    colors.border = style.outlineColor
-    colors.textMuted = style.textDecorationColor
-    colors.text = style.caretColor
-    colors.surface = style.backgroundColor
-    fontFamily.value = style.fontFamily
+  const updateFont = () => {
+    if (!chartRef.value) return
+    fontFamily.value = getComputedStyle(chartRef.value).fontFamily
   }
 
-  onMounted(() => {
-    const host = chartRef.value?.closest('#app-content') ?? chartRef.value?.parentElement
-    if (!host) return
-
-    probe = createThemeProbe()
-    host.appendChild(probe)
-    update()
+  onMounted(updateFont)
+  watch(themeColorScheme, (scheme) => Object.assign(colors, CHART_COLOR_SCHEMES[scheme]), {
+    flush: 'post',
   })
-
-  watch([theme, font, emoji], () => nextTick(update))
-  // 探针还没挂上(图表在首屏外)时,至少让静态值跟着明暗档换。
-  watch(
-    themeColorScheme,
-    (scheme) => {
-      if (!probe) Object.assign(colors, CHART_COLOR_SCHEMES[scheme])
-    },
-    { flush: 'post' },
-  )
-
-  onUnmounted(() => {
-    probe?.remove()
-    probe = null
-  })
+  watch([font, emoji], () => nextTick(updateFont))
 
   return { colors, fontFamily }
 }
