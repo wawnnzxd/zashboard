@@ -1,8 +1,19 @@
 <template>
+  <!--
+    浮动态与控制栏之间的间距放在这个兄弟占位上,不能写成横条自己的 mt-。
+    sticky 约束的是 **margin box**:横条带着上外边距吸附时,边框盒会被顶到
+    「偏移量 + 外边距」处,中间那条外边距是透明的 —— 滚动内容正好从缝里穿过去
+    (上游 e7a42165 给横条加毛玻璃就是在遮这个,遮住了但没堵上)。
+    占位自身随内容滚走,吸附后横条边框盒正好贴住控制栏底边。
+  -->
+  <div
+    class="h-3"
+    aria-hidden="true"
+  ></div>
   <div
     ref="topBarRef"
     class="bg-base-100 md:bg-base-100/80 border-base-300/50 sticky z-10 flex min-w-0 items-center gap-1 overflow-hidden shadow transition-all duration-300 md:backdrop-blur-xl"
-    :class="isStuck ? 'm-0 rounded-none px-4 pt-2 pb-1.5' : 'mx-3 mt-3 rounded-xl p-1'"
+    :class="isStuck ? 'mx-0 rounded-none px-4 pt-2 pb-1.5' : 'mx-3 rounded-xl p-1'"
     :style="{ top: isMiddleScreen ? '-1px' : `${ctrlsBottom - 1}px` }"
   >
     <div class="scrollbar-hidden flex min-w-0 flex-1 items-center gap-1 overflow-x-auto">
