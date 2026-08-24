@@ -1,6 +1,5 @@
 // 组装层 · connections 门面。连接流、断连/封锁动作,以及「原始连接数据 → view 字段」的
-// 访问器与 getConnectionDisplayValue,都按后端类型动态路由到对应实现。
-import { Channel, channel } from '@/assembly/backend'
+// 访问器与 getConnectionDisplayValue,都转交 clash 实现。
 import { CONNECTIONS_TABLE_ACCESSOR_KEY } from '@/constant'
 import type { Connection } from '@/types'
 import pLimit from 'p-limit'
@@ -9,29 +8,9 @@ import * as clash from './clash'
 
 export type { ConnectionsSnapshot }
 
-// sing-box 实现(连同 gRPC 栈 ~130KB)按需加载,clash 用户不再买单。
-// 访问器是同步热路径,故用「init 前预载 + 同步委派」而非逐调用动态 import。
-let singboxModule: typeof import('./singbox') | null = null
+export const disconnectByIdAPI = (id: string) => clash.disconnectByIdAPI(id)
 
-export const preloadConnectionsBackend = async () => {
-  if (channel.value === Channel.Singbox && !singboxModule) {
-    singboxModule = await import('./singbox')
-  }
-}
-
-const backend = () => {
-  if (channel.value !== Channel.Singbox) {
-    return clash
-  }
-  if (!singboxModule) {
-    throw new Error('sing-box connections backend not preloaded')
-  }
-  return singboxModule
-}
-
-export const disconnectByIdAPI = (id: string) => backend().disconnectByIdAPI(id)
-
-export const disconnectAllAPI = () => backend().disconnectAllAPI()
+export const disconnectAllAPI = () => clash.disconnectAllAPI()
 
 const disconnectLimiter = pLimit(12)
 
@@ -57,23 +36,23 @@ export const disconnectConnections = async (conns: Connection[], totalActive?: n
   )
 }
 
-export const fetchConnectionsAPI = () => backend().fetchConnectionsAPI()
+export const fetchConnectionsAPI = () => clash.fetchConnectionsAPI()
 
 // 当前后端的连接字段访问器(直接读取原始数据,不做 clash 形状化)。
-export const connectionAccessor = () => backend().connectionAccessor
+export const connectionAccessor = () => clash.connectionAccessor
 
 // 动态选用当前后端的 getConnectionDisplayValue。
 export const getConnectionDisplayValue = (
   connection: Connection,
   key: CONNECTIONS_TABLE_ACCESSOR_KEY,
   options: ConnectionDisplayOptions,
-) => backend().getConnectionDisplayValue(connection, key, options)
+) => clash.getConnectionDisplayValue(connection, key, options)
 
 export const getConnectionVisibleSearchValues = (
   connection: Connection,
   keys: CONNECTIONS_TABLE_ACCESSOR_KEY[],
   options: ConnectionDisplayOptions,
-) => backend().getConnectionVisibleSearchValues(connection, keys, options)
+) => clash.getConnectionVisibleSearchValues(connection, keys, options)
 
 // 连接封锁动作(Clash 专属),经 connections 域门面暴露给 view。
 export { blockConnectionByIdAPI } from '@/api/clash'

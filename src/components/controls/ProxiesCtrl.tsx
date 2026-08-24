@@ -1,6 +1,4 @@
-import { can } from '@/assembly/backend'
 import { configs, updateConfigs } from '@/assembly/config'
-import { disconnectConnections } from '@/assembly/connections'
 import {
   allProxiesLatencyTest,
   fetchProxies,
@@ -16,7 +14,6 @@ import { isProxyNodeSearchMode, toggleProxySearchMode } from '@/composables/prox
 import { useCtrlsBar } from '@/composables/useCtrlsBar'
 import { PROXY_SORT_TYPE, PROXY_TAB_TYPE, ROUTE_NAME, SETTINGS_MENU_KEY } from '@/constant'
 import { getMinCardWidth } from '@/helper/utils'
-import { activeConnections } from '@/store/connections'
 import { isProxyFolderModeActive } from '@/store/proxyFolders'
 import {
   automaticDisconnection,
@@ -93,13 +90,6 @@ export default defineComponent({
 
     const handlerModeChange = (mode: string) => {
       updateConfigs({ mode })
-      if (can('disconnectOnModeChange') && automaticDisconnection.value) {
-        const matching = activeConnections.value.filter((connection) =>
-          connection.rule.includes('clash_mode'),
-        )
-
-        disconnectConnections(matching, activeConnections.value.length)
-      }
     }
 
     const handlerClickLatencyTestAll = async () => {

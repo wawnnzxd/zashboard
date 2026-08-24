@@ -240,7 +240,7 @@ const sectionDefs: { id: string; keys: CONNECTIONS_TABLE_ACCESSOR_KEY[] }[] = [
     ],
   },
   { id: 'traffic', keys: [KEY.Download, KEY.Upload, KEY.DlSpeed, KEY.UlSpeed] },
-  { id: 'outbound', keys: [KEY.Chains, KEY.Outbound, KEY.OutboundType, KEY.FromOutbound] },
+  { id: 'outbound', keys: [KEY.Chains, KEY.Outbound] },
 ]
 
 const sections = computed(() => {

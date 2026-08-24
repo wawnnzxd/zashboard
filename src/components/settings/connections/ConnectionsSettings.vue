@@ -56,10 +56,7 @@
     <template v-if="hasVisibleIdentityItems">
       <div class="settings-section-label">{{ $t('settingsSectionClientIdentity') }}</div>
       <div class="settings-grid">
-        <SettingItem
-          :setting-key="k.resolveClientHostname"
-          :when="can('dnsQuery')"
-        >
+        <SettingItem :setting-key="k.resolveClientHostname">
           <div class="setting-item-label">{{ $t('resolveClientHostname') }}</div>
           <input
             v-model="resolveClientHostname"
@@ -74,7 +71,6 @@
 </template>
 
 <script setup lang="ts">
-import { can } from '@/assembly/backend'
 import SelectInput from '@/components/common/SelectInput.vue'
 import SourceIPLabels from '@/components/settings/connections/SourceIPLabels.vue'
 import SettingItem from '@/components/settings/SettingItem.vue'
@@ -111,6 +107,6 @@ const hasVisibleDisplayItems = computed(
     (!isConnectionCard.value && (isVisibleTableWidth.value || isVisibleTableSize.value)),
 )
 const hasVisibleIdentityItems = computed(
-  () => (can('dnsQuery') && isVisibleResolveHostname.value) || isVisibleSourceLabels.value,
+  () => isVisibleResolveHostname.value || isVisibleSourceLabels.value,
 )
 </script>

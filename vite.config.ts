@@ -53,32 +53,13 @@ export default defineConfig({
         // 反选更干净:globIgnores 保持「排除懒加载 chunk」这一单一语义。)
         // 也不含 md:只有 public/THIRD_PARTY_NOTICES.md,离线预取它没有意义。
         globPatterns: ['**/*.{js,css,html,ico,png,svg,webp,jpg}'],
-        // The bundle is above Workbox's 2 MiB default because sing-box native
-        // API support and the Tools page are always bundled.
+        // 主 chunk 仍留着抬高的上限:离 Workbox 的 2 MiB 默认值不算远,
+        // 别让它某次小幅增长就悄悄掉出 precache(离线即失效)。
         maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
-        // Tools 页与 xterm 多数用户从不打开,不进 precache(首装省 ~400KB),
-        // 首次访问时走运行时缓存;
-        // background.jpg 同理 —— 它只在 earthVisualMode === 'space' 时才被采样,
-        // 而默认是 'flat',默认配置下这 220KB 100% 用不到(其余三张贴图保留,
-        // 扁平模式就要用)。
-        globIgnores: ['**/xterm-*.js', '**/ToolsPage-*.js', '**/background-*.jpg'],
+        // background.jpg 只在 earthVisualMode === 'space' 时才被采样,而默认是
+        // 'flat',默认配置下这 220KB 100% 用不到(其余三张贴图保留,扁平模式就要用)。
+        globIgnores: ['**/background-*.jpg'],
         runtimeCaching: [
-          {
-            urlPattern: /assets\/(xterm|ToolsPage)-[^/]*\.js$/,
-            handler: 'CacheFirst',
-            options: {
-              cacheName: 'lazy-tools',
-              // 文件名带内容 hash,新版本必然是新 URL,旧条目再也不会被命中;
-              // 而 cleanupOutdatedCaches() 只清 workbox precache,不碰这里。
-              // 留 4 个条目(约两版 xterm+ToolsPage)既能挤掉陈旧版本,又给
-              // 「某次分包多产出一个同名 chunk」留余量,不至于自己淘汰自己。
-              expiration: {
-                maxEntries: 4,
-                maxAgeSeconds: 60 * 60 * 24 * 30,
-                purgeOnQuotaError: true,
-              },
-            },
-          },
           {
             // 星空背景不进 precache,但切到 space 模式后要能离线复用:globeLayer 是
             // Promise.all 一起等四张贴图的,缺一张整个地球仪就起不来。
@@ -147,15 +128,13 @@ export default defineConfig({
     rollupOptions: {
       output: {
         // 稳定的 vendor 分层:业务改一行不再让用户重下整个单体 entry。
-        // 只钉共享大件与强隔离件(xterm/grpc 只被各自的懒消费方引用,
+        // 只钉共享大件与强隔离件(three 只被地球仪这个懒消费方引用,
         // 命名 chunk 不会被别的入口拉下来),其余交给 rollup 按使用点自动分。
         manualChunks(id: string) {
           if (!id.includes('node_modules')) return undefined
           if (id.includes('echarts') || id.includes('zrender')) return 'echarts'
-          if (id.includes('@xterm')) return 'xterm'
           if (id.includes('/three/') || id.includes('/three@')) return 'three'
           if (id.includes('vue-i18n') || id.includes('@intlify')) return 'i18n'
-          if (id.includes('@bufbuild') || id.includes('@connectrpc')) return 'grpc'
           // vuedraggable 是 CJS,它的 require('vue') 走 node 的 require 条件,解析到
           // vue 完整版(vue/index.js → dist/vue.cjs.prod.js),而完整版无条件带上
           // @vue/compiler-dom。全 app 没有任何运行时模板编译,这份编译器却被下面的

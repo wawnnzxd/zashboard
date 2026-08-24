@@ -1,7 +1,7 @@
 // 组装层 · logs 门面。持有完整的 logs ref 与流控状态(暂停 / 级别),
 // 按后端类型路由订阅,并经累加器把各后端原生日志批次组装进 logs ref。
 // store 直接引用这里导出的 logs / initLogs,不再参与组装。
-import { can, Channel, channel, core, Core } from '@/assembly/backend'
+import { can, core, Core } from '@/assembly/backend'
 import { LOG_LEVEL } from '@/constant'
 import { useStorage } from '@/helper/storage'
 import { activeBackend } from '@/store/setup'
@@ -20,7 +20,6 @@ export const supportedLogLevels = computed(() => {
   const levels = [LOG_LEVEL.Debug, LOG_LEVEL.Info, LOG_LEVEL.Warning, LOG_LEVEL.Error]
 
   if (can('traceLogLevel')) levels.unshift(LOG_LEVEL.Trace)
-  if (can('extraLogLevels')) levels.push(LOG_LEVEL.Fatal, LOG_LEVEL.Panic)
   if (can('silentLogLevel')) levels.push(LOG_LEVEL.Silent)
 
   return levels
@@ -36,26 +35,6 @@ watch(supportedLogLevels, (levels) => {
   if (cancel) initLogs()
 })
 
-// sing-box 实现(连同 gRPC 栈 ~130KB)按需加载,clash 用户不再买单。
-// 访问器是同步热路径,故用「init 前预载 + 同步委派」而非逐调用动态 import。
-let singboxModule: typeof import('./singbox') | null = null
-
-export const preloadLogsBackend = async () => {
-  if (channel.value === Channel.Singbox && !singboxModule) {
-    singboxModule = await import('./singbox')
-  }
-}
-
-const backend = () => {
-  if (channel.value !== Channel.Singbox) {
-    return clash
-  }
-  if (!singboxModule) {
-    throw new Error('sing-box logs backend not preloaded')
-  }
-  return singboxModule
-}
-
 let cancel: (() => void) | undefined
 
 export const initLogs = () => {
@@ -65,7 +44,7 @@ export const initLogs = () => {
   isPaused.value = false
 
   const accumulator = createLogsAccumulator(logs, () => isPaused.value)
-  const subscription = backend().subscribeLogs({ level: logLevel.value }, accumulator.push)
+  const subscription = clash.subscribeLogs({ level: logLevel.value }, accumulator.push)
 
   cancel = () => {
     accumulator.dispose()

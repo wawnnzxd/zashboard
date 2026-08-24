@@ -81,7 +81,6 @@ export const fetchConnectionsAPI = () => {
 
     // 上一拍存在、这一拍消失的连接即新关闭。速率归零(已经断了,留着上一拍的瞬时值会让「已关闭」
     // 列表永久显示 3.2 MB/s 这种定格值,ALL tab 按速率排序时死连接还会被顶到活跃连接前面),
-    // 与 sing-box 侧的 `enrich(c, 0, 0)` 对齐。
     // 必须克隆而非就地改写:这些对象正是上一拍 activeConnections 数组里的成员,就地归零会把暂停
     // 期间冻结的那批行悄悄改掉,任何后续重渲染都会露馅。
     const closed = Array.from(previousMap.values(), (conn) => ({
@@ -174,10 +173,8 @@ export const connectionAccessor: ConnectionAccessor = {
   },
   sniffHost: (connection) => asClash(connection).metadata.sniffHost,
   remoteAddress: (connection) => asClash(connection).metadata.remoteDestination,
-  // clash 不提供这些字段。
+  // clash 不提供该字段。
   protocol: () => '',
-  outboundType: () => '',
-  fromOutbound: () => '',
   smartBlock: (connection) => asClash(connection).metadata.smartBlock,
 }
 

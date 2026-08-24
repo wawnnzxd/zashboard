@@ -577,20 +577,6 @@ const columns: ColumnDef<Connection>[] = [
       getTableDisplayValue(original, CONNECTIONS_TABLE_ACCESSOR_KEY.Protocol),
     cell: highlightedCell(CONNECTIONS_TABLE_ACCESSOR_KEY.Protocol),
   },
-  {
-    header: () => t(CONNECTIONS_TABLE_ACCESSOR_KEY.OutboundType),
-    id: CONNECTIONS_TABLE_ACCESSOR_KEY.OutboundType,
-    accessorFn: (original) =>
-      getTableDisplayValue(original, CONNECTIONS_TABLE_ACCESSOR_KEY.OutboundType),
-    cell: highlightedCell(CONNECTIONS_TABLE_ACCESSOR_KEY.OutboundType),
-  },
-  {
-    header: () => t(CONNECTIONS_TABLE_ACCESSOR_KEY.FromOutbound),
-    id: CONNECTIONS_TABLE_ACCESSOR_KEY.FromOutbound,
-    accessorFn: (original) =>
-      getTableDisplayValue(original, CONNECTIONS_TABLE_ACCESSOR_KEY.FromOutbound),
-    cell: highlightedCell(CONNECTIONS_TABLE_ACCESSOR_KEY.FromOutbound),
-  },
 ]
 
 const grouping = useStorage<GroupingState>('config/table-grouping', [])
@@ -601,7 +587,7 @@ const columnPinning = useStorage<ColumnPinningState>('config/table-column-pinnin
   right: [],
 })
 
-// clash 的 start 是 ISO 串、sing-box 是数值时间戳;逐比较建 dayjs 太贵,数值化处理。
+// clash 的 start 是 ISO 串;逐比较建 dayjs 太贵,数值化处理。
 // 排序是 O(N log N) 次比较(2000 连接每拍约 4.4 万次),ISO 串解析不便宜,所以按连接
 // 对象记忆化:组装层每拍都产出全新对象,WeakMap 天然按拍失效、读不到过期值;而同一个
 // 对象的 start 永不变,缓存恒正确。不按 id 字符串缓存 —— 那要求每个写入点手工失效。

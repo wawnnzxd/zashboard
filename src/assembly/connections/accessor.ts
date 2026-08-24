@@ -1,6 +1,5 @@
 // 组装层 · connection 字段访问器。
-// 每种后端(clash / sing-box)各实现一份 ConnectionAccessor,直接从「原始数据」
-// 读取/派生 view 需要的字段 —— 不再把 sing-box 塑造成 clash 形状。
+// ConnectionAccessor 直接从「原始数据」读取 / 派生 view 需要的字段。
 // createGetConnectionDisplayValue 基于某一份 accessor 生成对应后端的 getConnectionDisplayValue,
 // 由 index.ts 门面按当前后端动态选用。
 import { getGeoIPInfoSync } from '@/api/geoip'
@@ -29,7 +28,6 @@ export interface ConnectionsSnapshot {
   // 在「全部」tab 按速率排序时把死连接顶到活跃连接前面。
   closed: Connection[]
   // 内核自启动的上/下行累计。clash 的连接 WS 消息原生携带,在此透传;
-  // sing-box 的连接流不带总量,由 status 统计流另行提供(见 store/overview)。
   downloadTotal?: number
   uploadTotal?: number
 }
@@ -55,11 +53,9 @@ export interface ConnectionAccessor {
   inboundUser(connection: Connection): string
   sniffHost(connection: Connection): string
   remoteAddress(connection: Connection): string
-  // 以下三项为 sing-box 原生字段;clash 无对应数据,返回空串(展示为 '-')。
+  // clash 无对应数据时返回空串(展示为 '-')。
   protocol(connection: Connection): string
-  outboundType(connection: Connection): string
-  fromOutbound(connection: Connection): string
-  // 仅 clash 支持的 smart 降级标记;sing-box 返回 undefined。
+  // smart 降级标记
   smartBlock(connection: Connection): string | undefined
 }
 
@@ -140,10 +136,6 @@ export const createGetConnectionDisplayValue =
         return accessor.inboundUser(connection)
       case CONNECTIONS_TABLE_ACCESSOR_KEY.Protocol:
         return accessor.protocol(connection) || '-'
-      case CONNECTIONS_TABLE_ACCESSOR_KEY.OutboundType:
-        return accessor.outboundType(connection) || '-'
-      case CONNECTIONS_TABLE_ACCESSOR_KEY.FromOutbound:
-        return accessor.fromOutbound(connection) || '-'
       case CONNECTIONS_TABLE_ACCESSOR_KEY.Close:
         return ''
     }

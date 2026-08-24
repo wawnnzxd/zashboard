@@ -1,4 +1,3 @@
-import { can } from '@/assembly/backend'
 import { configs } from '@/assembly/config'
 import {
   getProxyGroupChains,
@@ -10,7 +9,7 @@ import {
 import { GLOBAL, PROXY_TAB_TYPE } from '@/constant'
 import { isHiddenGroup } from '@/helper'
 import { groupsInActiveFolder, isProxyFolderModeActive } from '@/store/proxyFolders'
-import { customGlobalNode, displayGlobalByMode, manageHiddenGroup } from '@/store/settings'
+import { displayGlobalByMode, manageHiddenGroup } from '@/store/settings'
 import { isEmpty } from 'lodash-es'
 import { computed, ref } from 'vue'
 import {
@@ -44,18 +43,13 @@ const getRenderProxyGroups = () => {
 
   if (displayGlobalByMode.value) {
     if (configs.value?.mode.toUpperCase() === GLOBAL) {
-      const globalName =
-        can('customGlobalNode') && proxyMap.value[customGlobalNode.value]
-          ? customGlobalNode.value
-          : GLOBAL
-
-      return filterProxyGroups(getProxyGroupChains(globalName), false)
+      return filterProxyGroups(getProxyGroupChains(GLOBAL), false)
     }
 
     return filterProxyGroups(proxyGroupList.value)
   }
 
-  // sing-box 没有 GLOBAL 组,仅在其确实存在时才追加,避免渲染空组崩溃。
+  // GLOBAL 组不一定存在,仅在其确实存在时才追加,避免渲染空组崩溃。
   const globalGroups = proxyMap.value[GLOBAL] ? [GLOBAL] : []
   return filterProxyGroups([...proxyGroupList.value, ...globalGroups])
 }

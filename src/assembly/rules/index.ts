@@ -1,15 +1,14 @@
-// 组装层 · rules 门面。持有 rules / ruleProviderList 统一状态与渲染派生,
-// 按后端类型路由到 clash / singbox 实现(sing-box 不支持 rules)。
+// 组装层 · rules 门面。持有 rules / ruleProviderList 统一状态与渲染派生,拉取转交 clash 实现。
 import {
   toggleRuleDisabledAPI,
-  toggleRuleDisabledSingBoxAPI,
+  toggleRuleDisabledRefindAPI,
   updateRuleProviderAPI as updateRuleProviderRawAPI,
 } from '@/api/clash'
-import { Channel, channel } from '@/assembly/backend'
 import { RULE_TAB_TYPE } from '@/constant'
 import { toSearchRegex } from '@/helper/search'
 import type { Rule, RuleProvider } from '@/types'
 import { computed, ref } from 'vue'
+import * as clash from './clash'
 
 export const rulesFilter = ref('')
 export const rulesTabShow = ref(RULE_TAB_TYPE.RULES)
@@ -41,26 +40,23 @@ export const renderRulesProvider = computed(() => {
   })
 })
 
-const load = () => (channel.value === Channel.Singbox ? import('./singbox') : import('./clash'))
-
-export const fetchRules = async (options?: { maxAge?: number }) =>
-  (await load()).fetchRules(options)
+export const fetchRules = (options?: { maxAge?: number }) => clash.fetchRules(options)
 
 /** 写操作之后调用:放弃在途结果并清掉新鲜度,保证下一次 fetchRules 拿到的是写入之后的数据。 */
-export const invalidateRules = async () => (await load()).invalidateRules()
+export const invalidateRules = () => clash.invalidateRules()
 
-// 规则启用切换在 Clash 通道上有两套端点:sing-box 的规则带稳定 uuid(PUT /rules/{uuid}),
+// 规则启用切换有两套端点:带稳定 uuid 的规则走 PUT /rules/{uuid},
 // mihomo 按索引批量切换(PATCH /rules/disable)。用哪套由响应数据自己决定 ——
-// rule.uuid 是确定信息,比 core 轴的版本字符串嗅探可靠,故不走能力表。
+// rule.uuid 是确定信息,比版本字符串嗅探可靠,故不走能力表。
 export const toggleRuleDisabled = (rule: Rule, disabled: boolean) =>
   rule.uuid
-    ? toggleRuleDisabledSingBoxAPI(rule.uuid)
+    ? toggleRuleDisabledRefindAPI(rule.uuid)
     : toggleRuleDisabledAPI({ [rule.index]: disabled })
 
 // 写成功后就地更新这一条规则的启用态。原实现是「切开关 → 重拉全部规则 + 全部 provider」:
 // 内核并不回传新规则表,这次回读纯粹是为了翻一个 bool,而在它的飞行窗口(局域网百毫秒级)内
 // 点第二条规则,第二条的写入会被第一条的回读结果打回原位 —— 用户看到开关自己弹回去。
-// 启用态有两种载体(sing-box 规则带 extra,mihomo 直接在 rule 上),写入必须与 isRuleDisabled 的读取一致,
+// 启用态有两种载体(带 uuid 的规则放在 extra 里,mihomo 直接在 rule 上),写入必须与 isRuleDisabled 的读取一致,
 // 所以放在持有状态的门面里而不是各调用点自己拼。
 export const setRuleDisabled = (rule: Rule, disabled: boolean) => {
   const index = rules.value.indexOf(rule)

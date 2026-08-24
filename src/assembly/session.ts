@@ -14,10 +14,8 @@ import { initSatistic, stopSatistic } from '@/store/overview'
 import { activeBackend } from '@/store/setup'
 import { watch } from 'vue'
 import { fetchConfigs } from './config'
-import { preloadConnectionsBackend } from './connections'
-import { initLogs, preloadLogsBackend, stopLogs } from './logs'
-import { preloadOverviewBackend } from './overview'
-import { fetchProxies, proxiesTabShow, resetProxies } from './proxies'
+import { initLogs, stopLogs } from './logs'
+import { fetchProxies, proxiesTabShow } from './proxies'
 import { fetchRules, rulesTabShow } from './rules'
 import { resetSessionResources } from './sessionResource'
 import { probeActiveBackend } from './version'
@@ -40,10 +38,6 @@ export const startBackendSession = async () => {
   stopConnections()
   stopLogs()
   stopSatistic()
-  await resetProxies()
-  // sing-box 后端先预载动态实现(clash 下为空操作),init 内的同步委派才可用。
-  await Promise.all([preloadConnectionsBackend(), preloadLogsBackend(), preloadOverviewBackend()])
-
   if (current !== generation) return
 
   // 后端被清空(登出 / 401 / 新增后端)时就停在这:常驻流上面已经关掉,

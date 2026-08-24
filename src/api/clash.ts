@@ -1,11 +1,10 @@
-// api 层 · Clash 通道(REST / WebSocket)的纯请求函数。
+// api 层 · Clash API(REST / WebSocket)的纯请求函数。
 //
-// 「Clash 通道」上跑着三种方言(mihomo / sing-box / honk),本文件按方言分区:
-//   1. 通用         —— 三种方言都提供
-//   2. mihomo 专属  —— mihomo(含 smart 分支)的扩展端点,sing-box 与 honk 没有
-//   3. sing-box 的 Clash 兼容 API 专属 —— 仅 sing-box 提供的端点
+// Clash API 上跑着两种方言(mihomo / honk),本文件按方言分区:
+//   1. 通用        —— 两种方言都提供
+//   2. mihomo 专属 —— mihomo(含 smart 分支)的扩展端点,honk 没有
+//   3. 带 uuid 的规则端点 —— 部分 fork 核(如 reFind)提供,由响应数据自证
 // honk 实现的是通用分区的子集(没有 /upgrade/ui),故不单列分区,差异见能力表。
-// sing-box API(gRPC)是另一条通道,不在这里,见 api/singbox/。
 //
 // 新增端点时请放进对应分区。是否向用户暴露由 assembly/backend.ts 的能力表决定,
 // 本层不做任何后端判断。
@@ -146,7 +145,7 @@ export const queryDNSAPI = (params: { name: string; type: string }) => {
   })
 }
 
-// 面板自升级。mihomo 与 sing-box 的 Clash 兼容 API 都提供,honk 没有(见 dashboardUpgrade)。
+// 面板自升级。mihomo 提供,honk 没有。
 export const upgradeUIAPI = () => {
   return axios.post('/upgrade/ui')
 }
@@ -236,7 +235,7 @@ export const probeClashChannel = async (
 }
 
 // ==========================================================================
-// mihomo 专属(sing-box 官方版的 Clash 兼容 API 不提供)
+// mihomo 专属
 // ==========================================================================
 
 // smart 内核的节点权重。是否暴露由数据决定(proxy.type === 'smart'),不走能力表。
@@ -259,7 +258,7 @@ export const flushSmartGroupWeightsAPI = () => {
   return axios.post(`/cache/smart/flush`)
 }
 
-// 按索引批量切换规则启用状态;sing-box 侧走 toggleRuleDisabledSingBoxAPI。
+// 按索引批量切换规则启用状态;带 uuid 的规则走 toggleRuleDisabledRefindAPI。
 export const toggleRuleDisabledAPI = (data: Record<number, boolean>) => {
   return axios.patch(`/rules/disable`, data)
 }
@@ -310,11 +309,11 @@ export const deleteStorageAPI = () => {
 }
 
 // ==========================================================================
-// sing-box 的 Clash 兼容 API 专属
+// 带 uuid 的规则端点(部分 fork 核提供)
 // ==========================================================================
 
-// sing-box 的规则带稳定 uuid,按 uuid 切换启用状态;mihomo 走 PATCH /rules/disable。
+// 带稳定 uuid 的规则按 uuid 切换启用状态;mihomo 走 PATCH /rules/disable。
 // 两者的选择由响应数据(rule.uuid 是否存在)决定,见 assembly/rules。
-export const toggleRuleDisabledSingBoxAPI = (uuid: string) => {
+export const toggleRuleDisabledRefindAPI = (uuid: string) => {
   return axios.put(`/rules/${encodeURIComponent(uuid)}`)
 }
