@@ -355,6 +355,7 @@ const ru: LANG_MESSAGE = {
   deleteUploadedSettingsConfirm:
     'Вы уверены, что хотите удалить загруженные на бэкенд настройки? Это действие нельзя отменить.',
   upgradeSuccess: 'Обновление до новой версии выполнено успешно',
+  refreshToUpdate: 'Доступна новая версия — нажмите, чтобы обновить',
   numberOfChartsInSidebar: 'Количество графиков в боковой панели',
   flushSmartWeights: 'Очистить Smart веса',
   IPInfoAPI: 'API информации о IP',

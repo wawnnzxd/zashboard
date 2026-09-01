@@ -352,6 +352,7 @@ const en = {
   deleteUploadedSettingsConfirm:
     'Are you sure you want to delete the uploaded settings on the backend? This action cannot be undone.',
   upgradeSuccess: 'Upgrade successful',
+  refreshToUpdate: 'New version ready — tap to reload',
   numberOfChartsInSidebar: 'Number of charts in the sidebar',
   flushSmartWeights: 'Clear smart weights',
   IPInfoAPI: 'IP info API',

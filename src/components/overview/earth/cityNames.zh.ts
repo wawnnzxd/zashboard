@@ -953,6 +953,7 @@ export const CITY_ZH: Record<string, string> = {
   Sydney: '悉尼',
   Melbourne: '墨尔本',
   Brisbane: '布里斯班',
+  'South Brisbane': '南布里斯班',
   Perth: '珀斯',
   Adelaide: '阿德莱德',
   Canberra: '堪培拉',

@@ -341,6 +341,7 @@ const zhTW: LANG_MESSAGE = {
   deleteUploadedSettingsSuccess: '已上傳設定刪除成功',
   deleteUploadedSettingsConfirm: '確定要刪除後端上已上傳的設定嗎？此操作無法復原。',
   upgradeSuccess: '升級成功',
+  refreshToUpdate: '新版本已就緒,點擊重新整理',
   numberOfChartsInSidebar: '側邊欄圖表數量',
   flushSmartWeights: '清空Smart權重',
   IPInfoAPI: 'IP資訊API',

@@ -341,6 +341,7 @@ const zh: LANG_MESSAGE = {
   deleteUploadedSettingsSuccess: '已上传设置删除成功',
   deleteUploadedSettingsConfirm: '确定要删除后端上已上传的设置吗？此操作不可撤销。',
   upgradeSuccess: '升级成功',
+  refreshToUpdate: '新版本已就绪,点击刷新',
   numberOfChartsInSidebar: '侧边栏图表数量',
   flushSmartWeights: '清空Smart权重',
   IPInfoAPI: 'IP信息API',
