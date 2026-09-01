@@ -9,9 +9,9 @@ const zh: LANG_MESSAGE = {
   connections: '连接',
   logs: '日志',
 
-  // 后端类型
-  default: '默认',
   // 通用状态与标签
+  default: '默认',
+  skip: '跳过',
   online: '在线',
   offline: '离线',
   statusLabel: '状态',
@@ -21,6 +21,7 @@ const zh: LANG_MESSAGE = {
   addRow: '添加行',
   connected: '已连接',
   copy: '复制',
+
   // Shared labels and actions
   protocol: '协议',
   host: '主机',
@@ -35,7 +36,6 @@ const zh: LANG_MESSAGE = {
   uploadSpeed: '上传速度',
   memoryUsage: '内存使用',
   noData: '暂无数据',
-  refreshToUpdate: '新版本已就绪,点击刷新',
 
   // Backend actions and feedback
   flushFakeIP: '清空Fake IP',
@@ -46,10 +46,21 @@ const zh: LANG_MESSAGE = {
   restartCoreSuccess: '核心重启成功',
   reloadConfigsSuccess: '配置重载成功',
   updateGeoSuccess: 'GEO数据库更新成功',
+  actionRunning: '{action}执行中…',
   chains: '代理链',
   outbound: '出站节点',
   proxyGroup: '策略组',
   sortBy: '排序方式',
+  sortAToZ: 'A → Z',
+  sortZToA: 'Z → A',
+  sortLargestFirst: '从大到小',
+  sortSmallestFirst: '从小到大',
+  sortNewestFirst: '最新在前',
+  sortOldestFirst: '最早在前',
+  groupBy: '分组方式',
+  noGrouping: '不分组',
+  expandAllGroups: '展开全部分组',
+  collapseAllGroups: '折叠全部分组',
   rule: '规则',
   sourceIP: '源IP',
   activeConnections: '活跃',
@@ -165,6 +176,8 @@ const zh: LANG_MESSAGE = {
   ruleSettings: '规则设置',
   connectionDetails: '连接详情',
   customTheme: '自定义主题',
+  customCSS: '自定义 CSS',
+  customCSSTip: '以下样式会原样注入页面，无效的规则可能导致界面显示异常。',
   unavailableProxy: '隐藏不可用节点',
   protocolTips:
     '您正在尝试连接一个http后端但Desire是通过https提供的，这可能会导致连接错误，请在浏览器设置中允许不安全的内容，或者使用http版本面板例如http://board.zash.run.place',
@@ -322,6 +335,7 @@ const zh: LANG_MESSAGE = {
   syncSettingsSuccess: '设置同步成功',
   syncSettingsConfirm: '后端存储的设置将覆盖以下本地设置:\n\n{keys}\n\n是否应用?',
   importSettingsConfirm: '导入的设置将覆盖以下本地设置:\n\n{keys}\n\n是否应用?',
+  importFileFailed: '导入失败，{file} 不是有效的设置文件',
   dontAskAgainAlwaysApply: '不再提示，以后自动应用',
   confirmBeforeOverride: '覆盖本地设置前确认',
   deleteUploadedSettingsSuccess: '已上传设置删除成功',
@@ -359,7 +373,6 @@ const zh: LANG_MESSAGE = {
   importFromBackendTip:
     '默认的./zashboard-settings.json位于ui文件夹下，导入前请确保ui文件夹下存在配置文件。',
   importFailed: '导入失败，请检查url {url}',
-  importFileFailed: '导入失败，{file} 不是有效的设置文件',
   autoImportFromUrl: '自动导入',
   autoImportFromUrlTip:
     '启用后，每次打开Desire时会自动从url设置导入并计算hash，如果hash与上次导入的hash不同，则重新导入并刷新页面。',
@@ -388,6 +401,7 @@ const zh: LANG_MESSAGE = {
   topologyCharts: '拓扑图表',
   earthGlobeCard: '全球连接',
   earthGlobeTitle: '全球连接',
+  earthProjection: '投影方式',
   earthVisualStyle: '地球样式',
   earthVisualStyle_space: '星空',
   earthVisualStyle_flat: '扁平',
@@ -401,6 +415,8 @@ const zh: LANG_MESSAGE = {
   earthExpand: '扩展地球画面',
   earthCollapse: '还原地球画面',
   earthConnectionLine: '连接线路',
+  earthLegend: '端点图例',
+  earthLegendProxied: '经代理',
   earthDatabaseChecking: '正在检查本地城市数据库…',
   earthDatabaseLoading: '正在加载缓存的城市数据库…',
   earthDatabaseConsentTitle: '下载本地城市数据库？',
@@ -428,6 +444,10 @@ const zh: LANG_MESSAGE = {
   retry: '重试',
   connectionHistory: '连接历史',
   ruleHitCountCard: '规则命中统计',
+  honkStatsCard: 'honk 运行时统计',
+  honkStatsOutbounds: '出站',
+  honkStatsActiveConns: '活跃',
+  honkStatsErrors: '错误',
   latency: '延迟',
   icon: '图标',
   settingsMenuGeneral: '面板',

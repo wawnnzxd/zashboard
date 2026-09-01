@@ -3,6 +3,11 @@ import { readonly, ref } from 'vue'
 export type ConfirmDialogOptions = {
   title?: string
   message: string
+  /** 在正文下方显示的可选说明链接 */
+  link?: {
+    text: string
+    url: string
+  }
   confirmText?: string
   cancelText?: string
   confirmButtonClass?: string
@@ -13,7 +18,10 @@ export type ConfirmDialogOptions = {
 export type ConfirmDialogResult = {
   confirmed: boolean
   checked: boolean
+  action: ConfirmDialogAction
 }
+
+export type ConfirmDialogAction = 'confirm' | 'cancel' | 'dismiss'
 
 type ConfirmDialogRequest = ConfirmDialogOptions & {
   resolve: (value: ConfirmDialogResult) => void
@@ -40,11 +48,11 @@ export const showConfirmDialog = (options: ConfirmDialogOptions) => {
   })
 }
 
-export const resolveConfirmDialog = (confirmed: boolean, checked = false) => {
+export const resolveConfirmDialog = (action: ConfirmDialogAction, checked = false) => {
   const currentConfirmDialog = activeConfirmDialog.value
   if (!currentConfirmDialog) return
 
   activeConfirmDialog.value = undefined
-  currentConfirmDialog.resolve({ confirmed, checked })
+  currentConfirmDialog.resolve({ confirmed: action === 'confirm', checked, action })
   showNextConfirmDialog()
 }

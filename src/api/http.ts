@@ -3,7 +3,7 @@
 // 当前连接目标(baseURL / 鉴权)。其余 api 文件不得依赖上层。
 import { showNotification } from '@/helper/notification'
 import { getUrlFromBackend } from '@/helper/utils'
-import { activeBackend, activeUuid, openBackendManager } from '@/store/setup'
+import { activeBackend, activeUuid, backendManagerView, openBackendManager } from '@/store/setup'
 import axios, { AxiosError } from 'axios'
 import { nextTick } from 'vue'
 
@@ -32,10 +32,16 @@ axios.interceptors.response.use(
     }>,
   ) => {
     if (error.status === 401 && activeUuid.value) {
-      openBackendManager({ mode: 'edit', uuid: activeUuid.value })
-      nextTick(() => {
-        showNotification({ content: 'unauthorizedTip' })
-      })
+      const uuid = activeUuid.value
+      const alreadyEditing =
+        backendManagerView.value?.mode === 'edit' && backendManagerView.value.uuid === uuid
+
+      if (!alreadyEditing) {
+        openBackendManager({ mode: 'edit', uuid })
+        nextTick(() => {
+          showNotification({ content: 'unauthorizedTip' })
+        })
+      }
     }
 
     return Promise.reject(error)

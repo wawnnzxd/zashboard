@@ -1,5 +1,5 @@
 // 组装层 · logs 门面。持有完整的 logs ref 与流控状态(暂停 / 级别),
-// 按后端类型路由订阅,并经累加器把各后端原生日志批次组装进 logs ref。
+// 经累加器把内核的原生日志批次组装进 logs ref。
 // store 直接引用这里导出的 logs / initLogs,不再参与组装。
 import { can, core, Core } from '@/assembly/backend'
 import { LOG_LEVEL } from '@/constant'
@@ -14,7 +14,7 @@ export const logs = shallowRef<LogWithSeq[]>([])
 export const isPaused = ref(false)
 export const logLevel = useStorage<string>('config/log-level', LOG_LEVEL.Info)
 
-// 各内核认的 /logs?level= 取值不同(mihomo 无 trace,honk 无 fatal/panic/silent),
+// 各内核认的 /logs?level= 取值不同(mihomo 无 trace,honk 无 silent),
 // 传了不认的级别会被直接 400,WS 随后陷入无限重连,所以逐档按能力表拼。
 export const supportedLogLevels = computed(() => {
   const levels = [LOG_LEVEL.Debug, LOG_LEVEL.Info, LOG_LEVEL.Warning, LOG_LEVEL.Error]

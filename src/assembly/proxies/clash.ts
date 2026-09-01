@@ -87,7 +87,7 @@ const resolveProxies = async (signal: AbortSignal) => {
     ...proxyData.proxies,
   }
 
-  const smartGroups: string[] = []
+  let includesSmartGroup = false
   const ipv6Names: string[] = []
 
   // 图标回填/IPv6/smart 收集都在合并前的新对象上完成,保证 merge 的内容比较有效。
@@ -104,7 +104,7 @@ const resolveProxies = async (signal: AbortSignal) => {
     }
 
     if (proxy.type.toLowerCase() === PROXY_TYPE.Smart) {
-      smartGroups.push(name)
+      includesSmartGroup = true
     }
   })
 
@@ -136,8 +136,8 @@ const resolveProxies = async (signal: AbortSignal) => {
     proxyGroupList.value = nextGroupList
     proxyProviederList.value = providers
 
-    if (smartGroups.length > 0) {
-      initSmartWeights(smartGroups)
+    if (includesSmartGroup) {
+      initSmartWeights()
     }
   }
 }

@@ -107,6 +107,9 @@ export const fetchConnectionsAPI = () => {
   }
 }
 
+const getFinalProxyType = (c: ClashConnectionRawMessage) =>
+  proxyMap.value[head(c.chains) || '']?.type.toLowerCase()
+
 const asClash = (connection: Connection) => connection as ClashConnectionRawMessage
 
 const getNetwork = (c: ClashConnectionRawMessage) => {
@@ -158,9 +161,7 @@ export const connectionAccessor: ConnectionAccessor = {
   },
   destination: (connection) => {
     const clash = asClash(connection)
-    const finalProxyType = proxyMap.value[head(clash.chains) || '']?.type.toLowerCase()
-
-    if (finalProxyType === PROXY_TYPE.Direct && clash.metadata.remoteDestination) {
+    if (getFinalProxyType(clash) === PROXY_TYPE.Direct && clash.metadata.remoteDestination) {
       return clash.metadata.remoteDestination
     }
 
@@ -173,9 +174,8 @@ export const connectionAccessor: ConnectionAccessor = {
   },
   sniffHost: (connection) => asClash(connection).metadata.sniffHost,
   remoteAddress: (connection) => asClash(connection).metadata.remoteDestination,
-  // clash 不提供该字段。
-  protocol: () => '',
   smartBlock: (connection) => asClash(connection).metadata.smartBlock,
+  isDirect: (connection) => getFinalProxyType(asClash(connection)) === PROXY_TYPE.Direct,
 }
 
 export const getConnectionDisplayValue = createGetConnectionDisplayValue(connectionAccessor)

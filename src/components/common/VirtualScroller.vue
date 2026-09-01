@@ -66,7 +66,7 @@ const props = withDefaults(
     overscan?: number
     contentClass?: string
     // 行身份键(如日志 seq):头部插入型列表必须传,否则 index 键使全部可见行随平移重渲染
-    getItemKey?: (index: number) => string | number
+    getItemKey?: (item: unknown, index: number) => string | number
     // 已经永久离开数据源的行的上界(数值 key):小于它的测量值可以安全丢弃。
     // 必须取自**未过滤**的数据源 —— 用过滤后的 data 推这个界,会把「还在缓冲区、
     // 只是当前被过滤掉」的行的测量值一并删掉,清空过滤词那一瞬这些行全部回落到
@@ -91,7 +91,9 @@ const virutalOptions = computed(() => {
     overscan: props.overscan,
     paddingStart: paddingTop.value,
     paddingEnd: paddingBottom.value + 24,
-    ...(props.getItemKey ? { getItemKey: props.getItemKey } : {}),
+    ...(props.getItemKey
+      ? { getItemKey: (index: number) => props.getItemKey!(props.data[index], index) }
+      : {}),
   }
 })
 

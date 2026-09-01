@@ -1,19 +1,30 @@
 import { disconnectConnections } from '@/assembly/connections'
+import {
+  hasConnectionCardGroups,
+  hasExpandedConnectionCardGroups,
+  toggleAllConnectionCardGroups,
+} from '@/composables/connectionCardGroups'
 import { useCtrlsBar } from '@/composables/useCtrlsBar'
 import {
-  CONNECTION_TAB_TYPE,
+  CONNECTION_GROUPABLE_KEYS,
+  naturalSortDirection,
   ROUTE_NAME,
   SETTINGS_MENU_KEY,
   SORT_DIRECTION,
+  SORT_DIRECTION_LABEL_KEY,
   SORT_TYPE,
+  SORT_TYPE_GROUPS,
+  SORT_TYPE_VALUE_KIND,
+  type ConnectionGroupableKey,
 } from '@/constant'
 import { useTooltip } from '@/helper/tooltip'
 import {
   activeConnections,
+  connectionCardGroupKey,
   connectionFilter,
   connectionSortDirection,
   connectionSortType,
-  connectionTabShow,
+  connections,
   isClosedConnection,
   isPaused,
   quickFilterEnabled,
@@ -24,6 +35,8 @@ import { isConnectionCard } from '@/store/settings'
 import {
   BarsArrowDownIcon,
   BarsArrowUpIcon,
+  ChevronDownIcon,
+  ChevronUpIcon,
   LinkIcon,
   LinkSlashIcon,
   PauseIcon,
@@ -69,26 +82,49 @@ export default defineComponent({
     const { showTip, updateTip } = useTooltip()
     const { isLargeCtrlsBar } = useCtrlsBar(() => (isConnectionCard.value ? 860 : 720))
 
+    // 「升序 / 降序」对不同字段含义完全不同,按字段类型说人话:文本 A → Z、
+    // 流量从大到小、时间最新在前。
+    const sortDirectionLabel = () =>
+      t(
+        SORT_DIRECTION_LABEL_KEY[SORT_TYPE_VALUE_KIND[connectionSortType.value]][
+          connectionSortDirection.value
+        ],
+      )
+
     return () => {
       const sortForCards = (
         <div class={`join flex-1 ${isLargeCtrlsBar.value ? 'min-w-46' : ''}`}>
           <SelectInput
             class="join-item select select-sm flex-1"
+            aria-label={t('sortBy')}
             modelValue={connectionSortType.value}
-            onUpdate:modelValue={(value) => (connectionSortType.value = value as SORT_TYPE)}
-            options={(Object.values(SORT_TYPE) as string[]).map((value) => ({
-              value,
-              label: t(value) || value,
-            }))}
+            onUpdate:modelValue={(value) => {
+              const sortType = value as SORT_TYPE
+
+              connectionSortType.value = sortType
+              // 换字段就落回该字段的自然方向,否则选完「下载速度」还停在升序,
+              // 顶上全是 0 B 的连接。
+              connectionSortDirection.value = naturalSortDirection(sortType)
+            }}
+            options={SORT_TYPE_GROUPS.flatMap((sortGroup) =>
+              sortGroup.types.map((value) => ({
+                value: value as string,
+                label: t(value) || value,
+                group: t(sortGroup.labelKey),
+              })),
+            )}
           />
           <button
             class="btn join-item btn-sm"
+            aria-label={sortDirectionLabel()}
             onClick={() => {
               connectionSortDirection.value =
                 connectionSortDirection.value === SORT_DIRECTION.ASC
                   ? SORT_DIRECTION.DESC
                   : SORT_DIRECTION.ASC
+              updateTip(sortDirectionLabel())
             }}
+            onMouseenter={(e) => showTip(e, sortDirectionLabel(), { appendTo: 'parent' })}
           >
             {connectionSortDirection.value === SORT_DIRECTION.ASC ? (
               <BarsArrowUpIcon class="h-4 w-4" />
@@ -98,6 +134,46 @@ export default defineComponent({
           </button>
         </div>
       )
+
+      const groupForCards = (
+        <SelectInput
+          class="select select-sm min-w-0 flex-1"
+          modelValue={connectionCardGroupKey.value}
+          onUpdate:modelValue={(value) =>
+            (connectionCardGroupKey.value = value as ConnectionGroupableKey | null)
+          }
+          options={[
+            { value: null, label: t('noGrouping') },
+            ...CONNECTION_GROUPABLE_KEYS.map((value) => ({
+              value,
+              label: t(value),
+            })),
+          ]}
+        />
+      )
+
+      // 分组后卡片默认全折叠，逐个点开太慢，控制栏给一个整体展开 / 折叠的开关。
+      const toggleGroupsLabel = () =>
+        hasExpandedConnectionCardGroups.value ? t('collapseAllGroups') : t('expandAllGroups')
+      const toggleGroupsButton =
+        isConnectionCard.value && connectionCardGroupKey.value !== null ? (
+          <button
+            class="btn btn-circle btn-sm"
+            disabled={!hasConnectionCardGroups.value}
+            aria-label={toggleGroupsLabel()}
+            onClick={() => {
+              toggleAllConnectionCardGroups()
+              updateTip(toggleGroupsLabel())
+            }}
+            onMouseenter={(e) => showTip(e, toggleGroupsLabel(), { appendTo: 'parent' })}
+          >
+            {hasExpandedConnectionCardGroups.value ? (
+              <ChevronUpIcon class="h-4 w-4" />
+            ) : (
+              <ChevronDownIcon class="h-4 w-4" />
+            )}
+          </button>
+        ) : null
 
       const settingsModal = (
         <>
@@ -113,6 +189,12 @@ export default defineComponent({
           >
             <div class="flex flex-col gap-3 text-sm">
               <div class="settings-grid">
+                {isConnectionCard.value && (
+                  <div class="setting-item">
+                    <div class="setting-item-label">{t('groupBy')}</div>
+                    {groupForCards}
+                  </div>
+                )}
                 <div class="setting-item">
                   <div class="setting-item-label shrink-0!">{t('hideConnectionRegex')}</div>
                   <TextInput
@@ -163,7 +245,6 @@ export default defineComponent({
           v-model={connectionFilter.value}
           placeholder={`${t('search')} | Regex`}
           clearable={true}
-          debounce={200}
           class={isLargeCtrlsBar.value ? 'w-32 max-w-80 flex-1' : 'join-item min-w-0 flex-1'}
         />
       )
@@ -196,11 +277,8 @@ export default defineComponent({
           >
             {isPaused.value ? <PlayIcon class="h-4 w-4" /> : <PauseIcon class="h-4 w-4" />}
           </button>
-          {/* 「已关闭」tab 下没有任何可断的目标,置灰而不是移除 —— 移除会让控制栏少一颗按钮、
-              切 tab 时整条栏重新排版。这也与单条连接在该 tab 下不给关闭按钮的既有设计一致。 */}
           <button
             class="btn btn-circle btn-sm"
-            disabled={connectionTabShow.value === CONNECTION_TAB_TYPE.CLOSED}
             onClick={handlerClickCloseAll}
           >
             <XMarkIcon class="h-4 w-4" />
@@ -222,6 +300,7 @@ export default defineComponent({
           {isConnectionCard.value && (
             <div class="flex w-full items-center gap-2">
               {sortForCards}
+              {toggleGroupsButton}
               {settingsModal}
               {buttons}
             </div>
@@ -237,6 +316,7 @@ export default defineComponent({
           {isConnectionCard.value && sortForCards}
           <SourceIPFilter class="w-40" />
           <div class="flex flex-1">{searchInput}</div>
+          {toggleGroupsButton}
           {settingsModal}
           {buttons}
         </div>

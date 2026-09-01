@@ -29,7 +29,6 @@
     "@types/three": "^0.185.1",
     "@vueuse/core": "^14.4.0",
     "axios": "^1.19.0",
-    "buffer": "^6.0.3",
     "countup.js": "^2.10.1",
     "dayjs": "^1.11.21",
     "dompurify": "^3.4.12",
@@ -37,7 +36,6 @@
     "ipaddr.js": "^2.4.0",
     "lodash-es": "^4.17.21",
     "misans": "^4.1.0",
-    "mmdb-lib": "^3.0.3",
     "p-limit": "^7.3.1",
     "prettier-plugin-organize-imports": "^4.3.0",
     "prettier-plugin-tailwindcss": "^0.8.1",
@@ -53,8 +51,7 @@
     "vue-i18n": "^11.4.8",
     "vue-json-pretty": "^2.6.0",
     "vue-router": "^5.2.0",
-    "vuedraggable": "^4.1.0",
-    "workbox-window": "^7.3.0"
+    "vuedraggable": "^4.1.0"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.3.3",
@@ -72,6 +69,7 @@
     "eslint-plugin-vue": "^10.10.0",
     "husky": "^9.1.7",
     "lint-staged": "^17.2.0",
+    "mmdb-lib": "^3.0.3",
     "postcss": "^8.5.25",
     "prettier": "^3.9.6",
     "tailwind-merge": "^3.6.0",

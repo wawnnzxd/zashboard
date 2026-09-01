@@ -225,7 +225,7 @@ const tabOptions = computed<SegmentOption[]>(() =>
 const sectionDefs: { id: string; keys: CONNECTIONS_TABLE_ACCESSOR_KEY[] }[] = [
   {
     id: 'basic',
-    keys: [KEY.Type, KEY.ConnectTime, KEY.Rule, KEY.Process, KEY.InboundUser, KEY.Protocol],
+    keys: [KEY.Type, KEY.ConnectTime, KEY.Rule, KEY.Process, KEY.InboundUser],
   },
   {
     id: 'sourceAndDestination',

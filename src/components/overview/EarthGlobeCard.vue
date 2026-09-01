@@ -8,7 +8,17 @@
         {{ t('earthGlobeTitle') }}
       </div>
       <div class="flex items-center gap-1">
+        <SegmentedControl
+          :title="t('earthProjection')"
+          :model-value="earthProjection"
+          :options="[
+            { value: '3d', label: '3D' },
+            { value: '2d', label: '2D' },
+          ]"
+          @update:model-value="earthProjection = $event as '3d' | '2d'"
+        />
         <SelectInput
+          v-if="!isFlatMap"
           v-model="earthVisualMode"
           class="select select-ghost select-sm h-8 min-h-8 w-auto border-0"
           :aria-label="t('earthVisualStyle')"
@@ -31,6 +41,7 @@
           />
         </button>
         <button
+          v-if="!isFlatMap"
           class="btn btn-ghost btn-sm btn-square"
           :aria-label="t(rotationPaused ? 'earthResumeRotation' : 'earthPauseRotation')"
           :title="t(rotationPaused ? 'earthResumeRotation' : 'earthPauseRotation')"
@@ -67,10 +78,7 @@
 
     <div
       class="relative mt-2 w-full overflow-hidden rounded-xl"
-      :class="[
-        expanded ? 'min-h-0 flex-1' : 'h-96',
-        earthVisualMode === 'flat' ? 'bg-base-200/30' : 'bg-black',
-      ]"
+      :class="[expanded ? 'min-h-0 flex-1' : 'h-96', flatLook ? 'bg-base-200/30' : 'bg-black']"
     >
       <div
         ref="canvasRef"
@@ -121,27 +129,48 @@
       </div>
 
       <div
-        class="absolute bottom-2 left-2 flex flex-col items-start gap-0.5 text-[10px]"
-        :class="earthVisualMode === 'flat' ? 'text-base-content/55' : 'text-white/65'"
+        class="pointer-events-none absolute right-2 bottom-2 left-2 flex items-end justify-between gap-2"
       >
-        <a
-          class="hover:underline"
-          :class="earthVisualMode === 'flat' ? 'hover:text-base-content' : 'hover:text-white'"
-          href="https://db-ip.com/db/lite.php"
-          target="_blank"
-          rel="noopener noreferrer"
+        <div
+          class="pointer-events-auto flex flex-col items-start gap-0.5 text-[10px]"
+          :class="flatLook ? 'text-base-content/55' : 'text-white/65'"
         >
-          DB-IP City Lite
-        </a>
-        <a
-          class="hover:underline"
-          :class="earthVisualMode === 'flat' ? 'hover:text-base-content' : 'hover:text-white'"
-          href="https://www.solarsystemscope.com/textures/"
-          target="_blank"
-          rel="noopener noreferrer"
+          <a
+            class="hover:underline"
+            :class="flatLook ? 'hover:text-base-content' : 'hover:text-white'"
+            href="https://db-ip.com/db/lite.php"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            DB-IP City Lite
+          </a>
+          <a
+            class="hover:underline"
+            :class="flatLook ? 'hover:text-base-content' : 'hover:text-white'"
+            href="https://www.solarsystemscope.com/textures/"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Solar System Scope · CC BY 4.0
+          </a>
+        </div>
+
+        <ul
+          class="bg-base-100/75 flex flex-wrap justify-end gap-x-2.5 gap-y-1 rounded-lg px-2 py-1.5 text-[10px] shadow backdrop-blur-md"
+          :aria-label="t('earthLegend')"
         >
-          Solar System Scope · CC BY 4.0
-        </a>
+          <li
+            v-for="item in legendItems"
+            :key="item.label"
+            class="flex items-center gap-1"
+          >
+            <span
+              class="ring-base-content/20 h-2 w-2 shrink-0 rounded-full ring-1"
+              :style="{ backgroundColor: item.color }"
+            />
+            <span class="text-base-content/70 whitespace-nowrap">{{ item.label }}</span>
+          </li>
+        </ul>
       </div>
 
       <div
@@ -304,14 +333,17 @@
 </template>
 
 <script setup lang="ts">
+import { MASKED_IP } from '@/composables/publicIP'
+import SegmentedControl from '@/components/common/SegmentedControl.vue'
 import SelectInput from '@/components/common/SelectInput.vue'
+import { queryDNSAPI } from '@/assembly/config'
 import { getPublicIPInfo, type IPInfo } from '@/api/geoip'
-import { getCachedPublicIPInfo, MASKED_IP } from '@/composables/overview'
+import { getCachedPublicIPInfo } from '@/composables/overview'
 import { IP_INFO_API } from '@/constant'
 import { themeColorScheme } from '@/helper/theme'
 import { prettyBytesHelper } from '@/helper/utils'
 import { activeConnections } from '@/store/connections'
-import { earthIPInfoAPI, earthVisualMode, language, theme } from '@/store/settings'
+import { earthIPInfoAPI, earthProjection, earthVisualMode, language, theme } from '@/store/settings'
 import {
   ArrowPathIcon,
   ArrowsPointingInIcon,
@@ -322,12 +354,13 @@ import {
   PauseIcon,
   PlayIcon,
 } from '@heroicons/vue/24/outline'
-import { useDocumentVisibility, useElementVisibility, useMediaQuery } from '@vueuse/core'
+import { useMediaQuery } from '@vueuse/core'
 import * as ipaddr from 'ipaddr.js'
+import pLimit from 'p-limit'
 import type { CSSProperties } from 'vue'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { acquireGeoWorker, postGeoWorker, releaseGeoWorker } from './earth/geoWorkerHost'
+import { ENDPOINT_PALETTE } from './earth/palette'
 import { buildEarthRoutes } from './earth/routes'
 import {
   DBIP_COMPRESSED_BYTES,
@@ -354,7 +387,7 @@ const downloadTotalBytes = ref(DBIP_COMPRESSED_BYTES)
 const originIP = ref('')
 const originAPIInfo = ref<IPInfo | null>(null)
 const originStatus = ref<'loading' | 'ready' | 'error'>('loading')
-// 默认显示真实 IP,理由同 IPCheck.vue 的 showPrivacy(本地私人面板,不对自己藏)
+// 默认显示真实 IP:本地私人面板,不对自己藏;眼睛开关留给截图/录屏场景(不持久化)
 const showOriginIP = ref(true)
 const showCityLabels = ref(true)
 const rotationPaused = ref(false)
@@ -365,21 +398,17 @@ const hoveredEndpoint = ref<EarthEndpointInfo | null>(null)
 const tooltipPosition = ref({ x: 0, y: 0 })
 const reducedMotion = useMediaQuery('(prefers-reduced-motion: reduce)')
 const locationCache = new Map<string, EarthLocation | null>()
+const dnsCache = new Map<string, { ip: string | null; expiresAt: number }>()
+const dnsRequests = new Map<string, Promise<string | null>>()
+const dnsLookupLimit = pLimit(6)
 const lookupRequests = new Map<number, (locations: Record<string, EarthLocation | null>) => void>()
 let lookupID = 0
+let worker: Worker | null = null
 let refreshTimer: ReturnType<typeof setTimeout> | null = null
 let refreshRunning = false
 let refreshQueued = false
-let refreshPending = false
 let disposed = false
-let rendererFailed = false
 let originRequestID = 0
-
-// 卡片滚出视口 / 标签页在后台时,每秒的连接快照不再驱动路由聚合与图层更新
-//(渲染器内部已按相交状态停画,但聚合管线原本仍在照跑),回到可见补刷一次
-const cardVisible = useElementVisibility(canvasRef)
-const documentVisibility = useDocumentVisibility()
-const isCardHidden = () => !cardVisible.value || documentVisibility.value !== 'visible'
 
 // 初始化 Worker 与 three/webgpu 渲染器开销较大,先让路由切换动画跑完(0.35s)再在空闲时段执行,
 // 否则移动端切到概览页时主线程被占满,页面要卡一两秒才出现。
@@ -391,10 +420,22 @@ let initIdleHandle: number | null = null
 
 const isValidIP = (value: string) => Boolean(value && ipaddr.isValid(value))
 
-// 与「网络信息」卡同一条打码规则(composables/overview.ts 的 MASKED_IP):完全打码。
-// 原实现保留前两段(119.98.*.*),同一个秘密在两张卡上两套口径,
-// 松的那套就是泄露 —— 前两段足以定位到城市级。
+const normalizeIP = (value: string) => {
+  try {
+    return ipaddr.parse(value).toNormalizedString()
+  } catch {
+    return null
+  }
+}
+
+// 与「网络信息」卡同一条打码规则(publicIP.ts):完全打码。
+// 保留前两段的写法是泄露 —— 前两段足以定位到城市级。
 const maskIP = (value: string) => (isValidIP(value) ? MASKED_IP : '—')
+
+const isFlatMap = computed(() => earthProjection.value === '2d')
+// The 2D map always uses the flat palette, so it shares the light chrome that
+// the flat globe style uses.
+const flatLook = computed(() => isFlatMap.value || earthVisualMode.value === 'flat')
 
 const displayedOriginIP = computed(() => {
   if (originStatus.value === 'loading') return t('getting')
@@ -430,12 +471,72 @@ const showNoData = computed(
     !routesLoading.value &&
     routeCount.value === 0,
 )
+const legendItems = computed(() => [
+  { color: ENDPOINT_PALETTE.origin, label: t('earthRole_origin') },
+  { color: ENDPOINT_PALETTE.destination, label: t('earthLegendProxied') },
+  { color: ENDPOINT_PALETTE.direct, label: t('direct') },
+])
 const tooltipStyle = computed<CSSProperties>(() => ({
   left: `${Math.min(window.innerWidth - 190, tooltipPosition.value.x + 12)}px`,
   top: `${Math.min(window.innerHeight - 100, tooltipPosition.value.y + 12)}px`,
 }))
 
-const postWorker = (message: GeoWorkerRequest) => postGeoWorker(message)
+const postWorker = (message: GeoWorkerRequest) => worker?.postMessage(message)
+
+const resolveHostname = (hostname: string) => {
+  const cached = dnsCache.get(hostname)
+
+  if (cached && cached.expiresAt > Date.now()) return Promise.resolve(cached.ip)
+
+  const pending = dnsRequests.get(hostname)
+
+  if (pending) return pending
+
+  const request = dnsLookupLimit(async () => {
+    for (const { type, answerType } of [
+      { type: 'A', answerType: 1 },
+      { type: 'AAAA', answerType: 28 },
+    ]) {
+      try {
+        const { data } = await queryDNSAPI({ name: hostname, type })
+
+        for (const answer of data.Answer ?? []) {
+          const ip = answer.type === answerType ? normalizeIP(answer.data) : null
+
+          if (!ip) continue
+
+          dnsCache.set(hostname, {
+            ip,
+            expiresAt: Date.now() + Math.max(1, answer.TTL) * 1000,
+          })
+          return ip
+        }
+      } catch {
+        // Automatic DNS lookups are best-effort; one failed family may still leave the other usable.
+      }
+    }
+
+    dnsCache.set(hostname, { ip: null, expiresAt: Date.now() + 30_000 })
+    return null
+  }).finally(() => dnsRequests.delete(hostname))
+
+  dnsRequests.set(hostname, request)
+  return request
+}
+
+const resolveDestinationIPs = async (hostnames: string[]) => {
+  const entries = await Promise.all(
+    hostnames.map(async (hostname) => [hostname, await resolveHostname(hostname)] as const),
+  )
+
+  while (dnsCache.size > 4096) {
+    const oldest = dnsCache.keys().next().value
+    if (oldest === undefined) break
+    dnsCache.delete(oldest)
+  }
+
+  return Object.fromEntries(entries)
+}
 
 const lookupLocations = async (ips: string[], locale: string) => {
   const result: Record<string, EarthLocation | null> = {}
@@ -469,8 +570,6 @@ const lookupLocations = async (ips: string[], locale: string) => {
 }
 
 const refreshRoutes = async () => {
-  // 渲染器初始化失败(WebGPU/WebGL 都不可用)后再算路由也无处可画
-  if (rendererFailed) return
   if (refreshRunning) {
     refreshQueued = true
     return
@@ -508,6 +607,7 @@ const refreshRoutes = async () => {
         language.value,
         lookupLocations,
         preferredOrigin,
+        resolveDestinationIPs,
       )
 
       if (
@@ -537,22 +637,12 @@ const refreshRoutes = async () => {
 }
 
 const scheduleRouteRefresh = () => {
-  if (isCardHidden()) {
-    refreshPending = true
-    return
-  }
-  refreshPending = false
   if (refreshTimer) clearTimeout(refreshTimer)
   refreshTimer = setTimeout(() => {
     refreshTimer = null
     void refreshRoutes()
   }, 150)
 }
-
-// 隐藏期间攒下的那次刷新,回到可见时补上 —— 否则卡片一直停在滚出视口前的那份路由。
-watch([cardVisible, documentVisibility], () => {
-  if (refreshPending && !isCardHidden()) scheduleRouteRefresh()
-})
 
 const loadOrigin = async (force = false) => {
   const requestID = ++originRequestID
@@ -602,8 +692,7 @@ const retry = () => {
   if (databaseStatus.value === 'ready' && originStatus.value === 'ready') scheduleRouteRefresh()
 }
 
-const handleWorkerMessage = (data: GeoWorkerResponse) => {
-  if (data.type === 'activity') return
+const handleWorkerMessage = ({ data }: MessageEvent<GeoWorkerResponse>) => {
   if (data.type === 'lookup') {
     lookupRequests.get(data.id)?.(data.locations)
     lookupRequests.delete(data.id)
@@ -652,6 +741,7 @@ watch(language, () => {
   scheduleRouteRefresh()
 })
 watch(reducedMotion, (value) => renderer.value?.setReducedMotion(value))
+watch(earthProjection, (value) => renderer.value?.setProjection(value))
 watch(earthVisualMode, (value) => renderer.value?.setVisualMode(value))
 watch(
   theme,
@@ -665,7 +755,9 @@ watch(
 const initialize = async () => {
   if (disposed) return
 
-  acquireGeoWorker(handleWorkerMessage)
+  worker = new Worker(new URL('./earth/geoip.worker.ts', import.meta.url), { type: 'module' })
+  worker.addEventListener('message', handleWorkerMessage)
+  postWorker({ type: 'init' })
   void loadOrigin()
 
   await nextTick()
@@ -676,6 +768,7 @@ const initialize = async () => {
     if (!canvasRef.value || disposed) return
     const createdRenderer = await createEarthRenderer(canvasRef.value, {
       reducedMotion: reducedMotion.value,
+      projection: earthProjection.value,
       visualMode: earthVisualMode.value,
       colorScheme: themeColorScheme.value,
       onEndpointHover: handleEndpointHover,
@@ -693,10 +786,6 @@ const initialize = async () => {
   } catch {
     canvasRef.value?.replaceChildren()
     rendererError.value = t('earthRendererError')
-    // 没有渲染器就不需要城市库与每秒的路由聚合了
-    rendererFailed = true
-    if (refreshTimer) clearTimeout(refreshTimer)
-    releaseGeoWorker(handleWorkerMessage)
   }
 }
 
@@ -735,7 +824,11 @@ onBeforeUnmount(() => {
   if (initIdleHandle !== null) cancelIdleCallback(initIdleHandle)
   renderer.value?.dispose()
   renderer.value = undefined
-  releaseGeoWorker(handleWorkerMessage)
+  worker?.removeEventListener('message', handleWorkerMessage)
+  worker?.terminate()
+  worker = null
+  dnsCache.clear()
+  dnsRequests.clear()
   lookupRequests.clear()
 })
 </script>

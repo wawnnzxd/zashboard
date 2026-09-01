@@ -9,9 +9,9 @@ const zhTW: LANG_MESSAGE = {
   connections: '連接',
   logs: '日誌',
 
-  // 後端類型
-  default: '預設',
   // 通用狀態與標籤
+  default: '預設',
+  skip: '跳過',
   online: '線上',
   offline: '離線',
   statusLabel: '狀態',
@@ -21,6 +21,7 @@ const zhTW: LANG_MESSAGE = {
   addRow: '新增行',
   connected: '已連線',
   copy: '複製',
+
   // Shared labels and actions
   protocol: '協議',
   host: '主機',
@@ -35,7 +36,6 @@ const zhTW: LANG_MESSAGE = {
   uploadSpeed: '上傳速度',
   memoryUsage: '記憶體使用',
   noData: '暫無資料',
-  refreshToUpdate: '新版本已就緒,點擊重新整理',
 
   // Backend actions and feedback
   flushFakeIP: '清空Fake IP',
@@ -46,10 +46,21 @@ const zhTW: LANG_MESSAGE = {
   restartCoreSuccess: '核心重啟成功',
   reloadConfigsSuccess: '配置重載成功',
   updateGeoSuccess: 'GEO資料庫更新成功',
+  actionRunning: '{action}執行中…',
   chains: '代理鏈',
   outbound: '出站節點',
   proxyGroup: '策略組',
   sortBy: '排序方式',
+  sortAToZ: 'A → Z',
+  sortZToA: 'Z → A',
+  sortLargestFirst: '由大到小',
+  sortSmallestFirst: '由小到大',
+  sortNewestFirst: '最新在前',
+  sortOldestFirst: '最早在前',
+  groupBy: '分組方式',
+  noGrouping: '不分組',
+  expandAllGroups: '展開全部分組',
+  collapseAllGroups: '摺疊全部分組',
   rule: '規則',
   sourceIP: '源IP',
   activeConnections: '活躍',
@@ -165,6 +176,8 @@ const zhTW: LANG_MESSAGE = {
   ruleSettings: '規則設定',
   connectionDetails: '連接詳情',
   customTheme: '自訂主題',
+  customCSS: '自訂 CSS',
+  customCSSTip: '以下樣式會原樣注入頁面，無效的規則可能導致介面顯示異常。',
   unavailableProxy: '隱藏不可用節點',
   protocolTips:
     '您正在嘗試連接一個http後端但Desire是通過https提供的，這可能會導致連接錯誤，請在瀏覽器設定中允許不安全的內容，或者使用http版本面板例如http://board.zash.run.place',
@@ -322,6 +335,7 @@ const zhTW: LANG_MESSAGE = {
   syncSettingsSuccess: '設定同步成功',
   syncSettingsConfirm: '後端儲存的設定將覆蓋以下本地設定:\n\n{keys}\n\n是否套用?',
   importSettingsConfirm: '匯入的設定將覆蓋以下本地設定:\n\n{keys}\n\n是否套用?',
+  importFileFailed: '匯入失敗，{file} 不是有效的設定檔',
   dontAskAgainAlwaysApply: '不再提示，以後自動套用',
   confirmBeforeOverride: '覆蓋本地設定前確認',
   deleteUploadedSettingsSuccess: '已上傳設定刪除成功',
@@ -359,7 +373,6 @@ const zhTW: LANG_MESSAGE = {
   importFromBackendTip:
     '預設的./zashboard-settings.json位於ui資料夾下，匯入前請確保ui資料夾下存在配置檔案。',
   importFailed: '匯入失敗，請檢查url {url}',
-  importFileFailed: '匯入失敗，{file} 不是有效的設定檔',
   autoImportFromUrl: '自動匯入',
   autoImportFromUrlTip:
     '啟用後，每次開啟Desire時會自動從url設定匯入並計算hash，如果hash與上次匯入的hash不同，則重新匯入並重新整理頁面。',
@@ -388,6 +401,7 @@ const zhTW: LANG_MESSAGE = {
   topologyCharts: '拓撲圖表',
   earthGlobeCard: '全球連接',
   earthGlobeTitle: '全球連接',
+  earthProjection: '投影方式',
   earthVisualStyle: '地球樣式',
   earthVisualStyle_space: '星空',
   earthVisualStyle_flat: '扁平',
@@ -401,6 +415,8 @@ const zhTW: LANG_MESSAGE = {
   earthExpand: '展開地球畫面',
   earthCollapse: '還原地球畫面',
   earthConnectionLine: '連接線路',
+  earthLegend: '端點圖例',
+  earthLegendProxied: '經代理',
   earthDatabaseChecking: '正在檢查本機城市資料庫…',
   earthDatabaseLoading: '正在載入快取的城市資料庫…',
   earthDatabaseConsentTitle: '下載本機城市資料庫？',
@@ -428,6 +444,10 @@ const zhTW: LANG_MESSAGE = {
   retry: '重試',
   connectionHistory: '連接歷史',
   ruleHitCountCard: '規則命中統計',
+  honkStatsCard: 'honk 執行時統計',
+  honkStatsOutbounds: '出站',
+  honkStatsActiveConns: '活躍',
+  honkStatsErrors: '錯誤',
   latency: '延遲',
   icon: '圖示',
   settingsMenuGeneral: '面板',

@@ -7,9 +7,9 @@ const en = {
   connections: 'Connections',
   logs: 'Logs',
 
-  // Backend type
+  // Common states and labels
   default: 'Default',
-  // Shared status labels
+  skip: 'Skip',
   online: 'Online',
   offline: 'Offline',
   statusLabel: 'Status',
@@ -19,6 +19,7 @@ const en = {
   addRow: 'Add row',
   connected: 'Connected',
   copy: 'Copy',
+
   // Shared labels and actions
   protocol: 'Protocol',
   host: 'Host',
@@ -33,7 +34,6 @@ const en = {
   uploadSpeed: 'Upload speed',
   memoryUsage: 'Memory usage',
   noData: 'No data',
-  refreshToUpdate: 'New version ready — tap to reload',
 
   // Backend actions and feedback
   flushFakeIP: 'Flush fake IP',
@@ -44,10 +44,21 @@ const en = {
   restartCoreSuccess: 'Core restarted successfully',
   reloadConfigsSuccess: 'Configs reloaded successfully',
   updateGeoSuccess: 'Geo database updated successfully',
+  actionRunning: '{action}...',
   chains: 'Chains',
   outbound: 'Outbound',
   proxyGroup: 'Proxy group',
   sortBy: 'Sort by',
+  sortAToZ: 'A → Z',
+  sortZToA: 'Z → A',
+  sortLargestFirst: 'Largest first',
+  sortSmallestFirst: 'Smallest first',
+  sortNewestFirst: 'Newest first',
+  sortOldestFirst: 'Oldest first',
+  groupBy: 'Group by',
+  noGrouping: 'No grouping',
+  expandAllGroups: 'Expand all groups',
+  collapseAllGroups: 'Collapse all groups',
   rule: 'Rule',
   sourceIP: 'Source IP',
   activeConnections: 'Active',
@@ -164,6 +175,9 @@ const en = {
   ruleSettings: 'Rule settings',
   connectionDetails: 'Connection details',
   customTheme: 'Custom theme',
+  customCSS: 'Custom CSS',
+  customCSSTip:
+    'The styles below are injected into the page as-is. Invalid rules may break the layout.',
   unavailableProxy: 'Hide unavailable proxies',
   protocolTips:
     'You are trying to connect to an HTTP backend, but Desire is provided via HTTPS. This may cause connection errors. Please allow insecure content in your browser settings or use the HTTP version of Desire, such as http://board.zash.run.place.',
@@ -331,6 +345,7 @@ const en = {
     'The backend has stored settings that will override the following local settings:\n\n{keys}\n\nDo you want to apply them?',
   importSettingsConfirm:
     'The imported settings will override the following local settings:\n\n{keys}\n\nDo you want to apply them?',
+  importFileFailed: 'Import failed: {file} is not a valid settings file',
   dontAskAgainAlwaysApply: "Don't ask again, always apply",
   confirmBeforeOverride: 'Confirm before overriding local settings',
   deleteUploadedSettingsSuccess: 'Uploaded settings deleted successfully',
@@ -369,7 +384,6 @@ const en = {
   importFromBackendTip:
     'The default ./zashboard-settings.json is located in the ui folder. Please ensure the ui folder exists and contains the configuration file.',
   importFailed: 'Import failed, please check the URL: {url}',
-  importFileFailed: 'Import failed: {file} is not a valid settings file',
   autoImportFromUrl: 'Auto-import',
   autoImportFromUrlTip:
     'When enabled, settings will be automatically imported from the URL when opening Desire. If the hash differs from the last imported hash, settings will be re-imported and the page will be refreshed.',
@@ -398,6 +412,7 @@ const en = {
   topologyCharts: 'Topology charts',
   earthGlobeCard: 'Global connections',
   earthGlobeTitle: 'Global connections',
+  earthProjection: 'Projection',
   earthVisualStyle: 'Globe style',
   earthVisualStyle_space: 'Space',
   earthVisualStyle_flat: 'Flat',
@@ -411,6 +426,8 @@ const en = {
   earthExpand: 'Expand globe view',
   earthCollapse: 'Restore globe view',
   earthConnectionLine: 'Connection route',
+  earthLegend: 'Endpoint legend',
+  earthLegendProxied: 'Via proxy',
   earthDatabaseChecking: 'Checking the local city database…',
   earthDatabaseLoading: 'Loading the cached city database…',
   earthDatabaseConsentTitle: 'Download the local city database?',
@@ -439,6 +456,10 @@ const en = {
   retry: 'Retry',
   connectionHistory: 'Connection history',
   ruleHitCountCard: 'Rule hit/miss statistics',
+  honkStatsCard: 'honk runtime statistics',
+  honkStatsOutbounds: 'Outbounds',
+  honkStatsActiveConns: 'Active',
+  honkStatsErrors: 'Errors',
   latency: 'Latency',
   icon: 'Icon',
   settingsMenuGeneral: 'General',

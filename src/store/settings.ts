@@ -9,7 +9,6 @@ import {
   FONTS,
   GEOIP_ASN_DATABASE_URL,
   GEOIP_COUNTRY_DATABASE_URL,
-  GLOBAL,
   IP_INFO_API,
   IS_APPLE_DEVICE,
   LANG,
@@ -228,6 +227,7 @@ export const emoji = useStorage<EMOJIS>(
   IS_APPLE_DEVICE ? EMOJIS.TWEMOJI : EMOJIS.NOTO_COLOR_EMOJI,
 )
 export const customBackgroundURL = useStorage('config/custom-background-image', '')
+export const customCSS = useStorage('config/custom-css', '')
 export const dashboardTransparent = useStorage('config/dashboard-transparent', 90)
 export const autoUpgradeDashboard = useStorage('config/auto-upgrade', false)
 export const checkUpgradeCore = useStorage('config/check-upgrade-core', true)
@@ -303,6 +303,10 @@ const defaultOverviewCardOrder: { card: OVERVIEW_CARD; visible: boolean }[] = [
     card: OVERVIEW_CARD.RuleHitCountCard,
     visible: true,
   },
+  {
+    card: OVERVIEW_CARD.HonkStatsCard,
+    visible: true,
+  },
 ]
 
 // 存量配置首次补入全球连接时放在连接拓扑前；其他缺失卡片追加到末尾，
@@ -319,6 +323,7 @@ export const overviewCardOrder = useOrderedStorage(
 
 export const earthIPInfoAPI = useStorage<IP_INFO_API>('config/earth-ip-info-api', IP_INFO_API.IPIP)
 export const earthVisualMode = useStorage<'flat' | 'space'>('config/earth-visual-mode', 'flat')
+export const earthProjection = useStorage<'3d' | '2d'>('config/earth-projection', '3d')
 export const topologyApplyConnectionFilter = useStorage(
   'config/topology-apply-connection-filter',
   true,
@@ -378,7 +383,6 @@ export const minProxyCardWidth = useStorage<number>(
 export const manageHiddenGroup = useStorage('config/manage-hidden-group-mode', false)
 
 export const displayGlobalByMode = useStorage('config/display-global-by-mode', false)
-export const customGlobalNode = useStorage('config/custom-global-node-name', GLOBAL)
 
 export const proxyGroupIconSize = useStorage('config/proxy-group-icon-size', 24)
 export const proxyGroupIconMargin = useStorage('config/proxy-group-icon-margin', 6)

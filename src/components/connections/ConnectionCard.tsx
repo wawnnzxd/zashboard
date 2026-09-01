@@ -163,9 +163,6 @@ const cardRenderers: Record<
       {ctx.highlighted(CONNECTIONS_TABLE_ACCESSOR_KEY.InboundUser)}
     </div>
   ),
-  [CONNECTIONS_TABLE_ACCESSOR_KEY.Protocol]: (ctx) => (
-    <div class="whitespace-nowrap">{ctx.highlighted(CONNECTIONS_TABLE_ACCESSOR_KEY.Protocol)}</div>
-  ),
   [CONNECTIONS_TABLE_ACCESSOR_KEY.Close]: (ctx) => {
     const closeButton = (
       <button

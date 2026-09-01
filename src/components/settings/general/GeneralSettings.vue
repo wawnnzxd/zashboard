@@ -3,6 +3,7 @@
     <div class="settings-section-label">{{ $t('settingsSectionApplication') }}</div>
     <div class="settings-grid">
       <SettingItem
+        v-if="showDashboardUpgrade"
         :setting-key="k.actions"
         :anchor-key="`${k.actions}.upgradeDashboard`"
       >
@@ -204,6 +205,7 @@ import { useIsSettingVisible } from '@/composables/settings'
 import { GENERAL_ITEM_KEYS } from '@/config/settingsItems'
 import { IP_INFO_API } from '@/constant'
 import { handlerUpgradeSuccess } from '@/helper'
+import { notifyActionPending } from '@/helper/notification'
 import { notifyRequestError } from '@/helper/requestError'
 import { useTooltip } from '@/helper/tooltip'
 import { isMiddleScreen } from '@/helper/utils'
@@ -264,16 +266,21 @@ const hasVisibleInteractionItems = computed(
     (showDisplayAllFeatures.value && isVisibleDisplayAllFeatures.value),
 )
 
+// honk 没有 /upgrade/ui,按钮点了必然 404。
+const showDashboardUpgrade = computed(() => can('dashboardUpgrade'))
+
 const isUIUpgrading = ref(false)
 const handlerClickUpgradeUI = async () => {
   if (isUIUpgrading.value) return
   isUIUpgrading.value = true
+  // 升级请求可能跑好一会儿,按钮只是轻轻闪一下 —— 先弹一条「执行中」,结果出来再顶掉。
+  const notifyKey = notifyActionPending('upgradeDashboard')
   try {
     await upgradeUIAPI()
-    handlerUpgradeSuccess()
+    handlerUpgradeSuccess(notifyKey)
     setTimeout(() => window.location.reload(), 1000)
   } catch (error) {
-    notifyRequestError(error)
+    notifyRequestError(error, notifyKey)
   } finally {
     isUIUpgrading.value = false
   }

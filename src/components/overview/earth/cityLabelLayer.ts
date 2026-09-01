@@ -1,6 +1,7 @@
 import type { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { CSS2DObject, type CSS2DRenderer } from 'three/addons/renderers/CSS2DRenderer.js'
 import * as THREE from 'three/webgpu'
+import type { EarthView } from './projection'
 import type { EarthRenderEndpoint } from './rendererTypes'
 
 const CITY_LABEL_CLASS_NAME =
@@ -21,30 +22,29 @@ interface ProjectedCityLabel {
 }
 
 interface CityLabelLayerOptions {
-  earthGroup: THREE.Group
+  parent: THREE.Object3D
   camera: THREE.Camera
   controls: OrbitControls
   labelRenderer: CSS2DRenderer
+  view: EarthView
 }
 
 export interface CityLabelLayer {
   setEndpoints: (endpoints: readonly EarthRenderEndpoint[]) => void
+  setView: (view: EarthView) => void
   setVisible: (visible: boolean) => void
   updateVisibility: () => void
   dispose: () => void
 }
 
 export const createCityLabelLayer = (options: CityLabelLayerOptions): CityLabelLayer => {
-  const { camera, controls, earthGroup, labelRenderer } = options
+  const { camera, controls, parent, labelRenderer } = options
   const labelGroup = new THREE.Group()
-  earthGroup.add(labelGroup)
+  parent.add(labelGroup)
 
   const labels = new Map<string, CSS2DObject>()
-  // 标签尺寸只随文本变化,而文本只在 syncLabels 里写 —— 失效就放在那唯一的写点上,
-  // 读侧因此不必每帧重新 trim 城市名再比一次字符串。measured 记的是「这条尺寸是真量到的
-  // 还是估算的」:CSS2DRenderer 给不可见标签写 display:none,那时 gBCR 恒为 0×0
-  const labelSizes = new Map<CSS2DObject, { width: number; height: number; measured: boolean }>()
   let endpoints: readonly EarthRenderEndpoint[] = []
+  let view = options.view
   let disposed = false
   const cameraWorldPosition = new THREE.Vector3()
   const earthWorldPosition = new THREE.Vector3()
@@ -87,10 +87,7 @@ export const createCityLabelLayer = (options: CityLabelLayerOptions): CityLabelL
         labelGroup.add(label)
       }
 
-      if (label.element.textContent !== city) {
-        label.element.textContent = city
-        labelSizes.delete(label)
-      }
+      label.element.textContent = city
       label.position.copy(endpoint.position)
     }
 
@@ -98,46 +95,22 @@ export const createCityLabelLayer = (options: CityLabelLayerOptions): CityLabelL
       if (visibleKeys.has(key)) continue
       labelGroup.remove(label)
       labels.delete(key)
-      labelSizes.delete(label)
     }
-  }
-
-  const measureLabel = (label: CSS2DObject) => {
-    const cached = labelSizes.get(label)
-    // 只读内联 style 属性和 isConnected,都不触发布局。上一帧被预算/碰撞挡下的标签这时
-    // 是 display:none,量到的只会是 0×0 —— 旧代码因此拒绝缓存,于是这批标签每帧都要
-    // getBoundingClientRect,其中第一个还会在 labelRenderer 上一帧刚写完 transform/display
-    // 之后强制一次全文档样式重算 + 布局。把「这次量不到」也记下来,稳态下 gBCR 归零;
-    // 标签一旦真被显示,下一帧就用真实宽度覆盖估算值
-    const displayed = label.element.isConnected && label.element.style.display !== 'none'
-
-    if (cached && (cached.measured || !displayed)) return cached
-
-    const bounds = displayed ? label.element.getBoundingClientRect() : null
-    const size = {
-      width: bounds?.width || fallbackLabelWidth(label.element.textContent ?? ''),
-      height: bounds?.height || CITY_LABEL_FALLBACK_HEIGHT,
-      measured: (bounds?.width ?? 0) > 0,
-    }
-
-    labelSizes.set(label, size)
-    return size
   }
 
   // CSS labels do not share the globe's depth buffer. First discard cities past
   // the tangent horizon, then choose a zoom-dependent number of high-priority
   // labels whose screen-space rectangles do not overlap.
   const updateVisibility = () => {
-    if (disposed || !labelGroup.visible) return
+    if (disposed) return
 
-    // 一次性更新地球子树与相机的世界矩阵;各标签直接读 matrixWorld,
-    // 不再对每个标签调 getWorldPosition 反复回溯父链
     camera.updateWorldMatrix(true, false)
-    earthGroup.updateWorldMatrix(true, true)
-    cameraWorldPosition.setFromMatrixPosition(camera.matrixWorld)
-    earthWorldPosition.setFromMatrixPosition(earthGroup.matrixWorld)
+    parent.updateWorldMatrix(true, true)
+    camera.getWorldPosition(cameraWorldPosition)
+    parent.getWorldPosition(earthWorldPosition)
 
-    const { width, height } = labelRenderer.getSize()
+    const width = labelRenderer.domElement.clientWidth
+    const height = labelRenderer.domElement.clientHeight
     const candidates: ProjectedCityLabel[] = []
 
     for (const endpoint of endpoints) {
@@ -145,11 +118,15 @@ export const createCityLabelLayer = (options: CityLabelLayerOptions): CityLabelL
 
       if (!label) continue
       label.visible = false
-      labelWorldPosition.setFromMatrixPosition(label.matrixWorld)
-      labelSurfaceNormal.subVectors(labelWorldPosition, earthWorldPosition).normalize()
-      labelToCamera.subVectors(cameraWorldPosition, labelWorldPosition)
+      label.getWorldPosition(labelWorldPosition)
 
-      if (labelSurfaceNormal.dot(labelToCamera) <= 0) continue
+      // The flat map has no far side, so the horizon test only applies to the globe.
+      if (view.projection === '3d') {
+        labelSurfaceNormal.subVectors(labelWorldPosition, earthWorldPosition).normalize()
+        labelToCamera.subVectors(cameraWorldPosition, labelWorldPosition)
+
+        if (labelSurfaceNormal.dot(labelToCamera) <= 0) continue
+      }
 
       projectedLabelPosition.copy(labelWorldPosition).project(camera)
       if (
@@ -165,7 +142,9 @@ export const createCityLabelLayer = (options: CityLabelLayerOptions): CityLabelL
 
       const x = (projectedLabelPosition.x * 0.5 + 0.5) * width
       const y = (-projectedLabelPosition.y * 0.5 + 0.5) * height
-      const { width: labelWidth, height: labelHeight } = measureLabel(label)
+      const elementBounds = label.element.getBoundingClientRect()
+      const labelWidth = elementBounds.width || fallbackLabelWidth(endpoint.city)
+      const labelHeight = elementBounds.height || CITY_LABEL_FALLBACK_HEIGHT
 
       candidates.push({
         endpoint,
@@ -177,7 +156,12 @@ export const createCityLabelLayer = (options: CityLabelLayerOptions): CityLabelL
       })
     }
 
-    // endpoints 已在 setEndpoints 时按优先级排好序,candidates 天然有序,无需每帧再排
+    candidates.sort(
+      (left, right) =>
+        Number(right.endpoint.role === 'origin') - Number(left.endpoint.role === 'origin') ||
+        right.endpoint.connections - left.endpoint.connections ||
+        left.endpoint.key.localeCompare(right.endpoint.key),
+    )
 
     const cameraDistance = camera.position.distanceTo(controls.target)
     const zoom =
@@ -209,13 +193,14 @@ export const createCityLabelLayer = (options: CityLabelLayerOptions): CityLabelL
   return {
     setEndpoints(nextEndpoints) {
       if (disposed) return
-      // 优先级(本机 > 连接数多 > key)每秒排一次即可,不必每帧在候选集上重排
-      endpoints = [...nextEndpoints].sort(
-        (left, right) =>
-          Number(right.role === 'origin') - Number(left.role === 'origin') ||
-          right.connections - left.connections ||
-          (left.key < right.key ? -1 : left.key > right.key ? 1 : 0),
-      )
+      endpoints = nextEndpoints
+      syncLabels()
+    },
+    setView(nextView) {
+      if (disposed) return
+      view = nextView
+      // `endpointLayer` has already reprojected the shared Vector3 instances;
+      // this just copies the new positions across to the labels.
       syncLabels()
     },
     setVisible(visible) {
@@ -226,10 +211,9 @@ export const createCityLabelLayer = (options: CityLabelLayerOptions): CityLabelL
     dispose() {
       if (disposed) return
       disposed = true
-      earthGroup.remove(labelGroup)
+      parent.remove(labelGroup)
       labelGroup.clear()
       labels.clear()
-      labelSizes.clear()
       endpoints = []
     },
   }

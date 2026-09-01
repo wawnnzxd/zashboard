@@ -12,18 +12,23 @@ import {
   vec4,
 } from 'three/tsl'
 import * as THREE from 'three/webgpu'
+import { ENDPOINT_RADIUS } from './earthMath'
+import { ENDPOINT_PALETTE } from './palette'
+import { projectEarthSample, projectionMorph, toLocalSample, type EarthView } from './projection'
 import type { EarthRenderEndpoint, EarthRenderSnapshot, EarthVisualMode } from './rendererTypes'
 
 const ENDPOINT_CORE_RADIUS = 0.011
 const ENDPOINT_GLOW_RADIUS = 0.032
 const ROLE_COLORS = {
-  origin: new THREE.Color('#ffffff'),
-  destination: new THREE.Color('#79d8ff'),
+  origin: new THREE.Color(ENDPOINT_PALETTE.origin),
+  destination: new THREE.Color(ENDPOINT_PALETTE.destination),
 } as const
 const ROLE_GLOW_COLORS = {
   origin: new THREE.Color('#a9e9ff'),
   destination: new THREE.Color('#3fa8ff'),
 } as const
+const DIRECT_COLOR = new THREE.Color(ENDPOINT_PALETTE.direct)
+const DIRECT_GLOW_COLOR = new THREE.Color('#ff7a1a')
 // The user's own location is the anchor of every arc, so it gets a slightly
 // wider bead and halo than the destinations radiating out of it.
 const ROLE_SCALES = {
@@ -32,8 +37,9 @@ const ROLE_SCALES = {
 } as const
 
 interface EndpointLayerOptions {
-  earthGroup: THREE.Group
+  parent: THREE.Object3D
   camera: THREE.Camera
+  view: EarthView
   visualMode: EarthVisualMode
   sunDirection: THREE.Vector3
 }
@@ -50,6 +56,7 @@ export interface EndpointLayer {
     snapshot: EarthRenderSnapshot,
     topologyChanged: boolean,
   ) => readonly EarthRenderEndpoint[]
+  setView: (view: EarthView) => void
   setVisualMode: (mode: EarthVisualMode) => void
   setSunDirection: (direction: THREE.Vector3) => void
   update: (delta: number) => void
@@ -58,7 +65,7 @@ export interface EndpointLayer {
 }
 
 export const createEndpointLayer = (options: EndpointLayerOptions): EndpointLayer => {
-  const { camera, earthGroup } = options
+  const { camera, parent } = options
   // Endpoints are unlit beads, so their volume has to be faked in the shader:
   // `facing` is 1 at the point of the sphere aimed straight at the camera and 0
   // along the silhouette, which drives both the specular-like hot core and the
@@ -108,6 +115,7 @@ export const createEndpointLayer = (options: EndpointLayerOptions): EndpointLaye
   let endpointMesh: THREE.InstancedMesh | null = null
   let endpointGlowMesh: THREE.InstancedMesh | null = null
   let endpoints: readonly EarthRenderEndpoint[] = []
+  let view = options.view
   let visualMode = options.visualMode
   let pulseTime = 0
   let disposed = false
@@ -122,52 +130,38 @@ export const createEndpointLayer = (options: EndpointLayerOptions): EndpointLaye
     topHosts: endpoint.topHosts.map((host) => ({ ...host })),
   })
 
-  // InstancedMesh 只按容量创建、不足时才翻倍重建:拓扑每变一次(活跃代理下几乎每秒)
-  // 就 new 一对 InstancedMesh,three 会把旧 mesh 的 RenderObject/实例缓冲挂在共享
-  // material/geometry 的 dispose 闭包上,mesh.dispose() 并不摘除 —— 常驻页面即线性泄漏
-  let capacity = 0
-  const ensureMeshes = (needed: number) => {
-    if (endpointMesh && endpointGlowMesh && needed <= capacity) return
+  // Beads sit just above the surface. `cityLabelLayer` reads the very same
+  // Vector3 instances, so these are updated in place rather than replaced.
+  const projectEndpoints = () => {
+    const morph = projectionMorph(view.projection)
 
+    for (const endpoint of endpoints) {
+      projectEarthSample(toLocalSample(endpoint, ENDPOINT_RADIUS, view), morph, endpoint.position)
+    }
+  }
+
+  const isFlatLook = () => visualMode === 'flat' || view.projection === '2d'
+
+  const rebuildMeshes = () => {
     if (endpointMesh) {
-      earthGroup.remove(endpointMesh)
+      parent.remove(endpointMesh)
       endpointMesh.dispose()
     }
     if (endpointGlowMesh) {
-      earthGroup.remove(endpointGlowMesh)
+      parent.remove(endpointGlowMesh)
       endpointGlowMesh.dispose()
     }
 
-    // 用 needed * 2 而不是 needed:一次性大跳(GeoIP 就绪那一拍 0 → 80)时若容量恰好等于
-    // 当前需要,下一秒多出一个城市就要再重建一对 InstancedMesh(重编着色器 + 重建实例缓冲),
-    // 摊还保证当场失效。留一倍余量,增长才真是对数次重建
-    capacity = Math.max(64, capacity * 2, needed * 2)
+    const capacity = Math.max(1, endpoints.length)
     endpointMesh = new THREE.InstancedMesh(
       endpointGeometry,
-      visualMode === 'flat' ? flatEndpointMaterial : endpointMaterial,
+      isFlatLook() ? flatEndpointMaterial : endpointMaterial,
       capacity,
     )
     endpointGlowMesh = new THREE.InstancedMesh(endpointGlowGeometry, endpointGlowMaterial, capacity)
-    // capacity ≤ 1024 时(capacity*16*4 不超过 64KB uniform 上限)实例矩阵走的是 WebGPU 的
-    // uniform 数组路径,上传无条件发生 —— 这两行 setUsage 与后面的 needsUpdate 都不参与
-    // 上传决策。别据此以为「可以删」(超过 1024 会切回 attribute 路径,那时它们才生效),
-    // 也别据此以为「靠 needsUpdate 能省一次上传」
-    endpointMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage)
-    endpointGlowMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage)
-    // Draw the beads above the arcs and the halos last, so the additive glow
-    // blends over everything already on screen.
-    endpointMesh.renderOrder = 5
-    endpointGlowMesh.renderOrder = 6
-    earthGroup.add(endpointMesh, endpointGlowMesh)
-  }
-
-  const rebuildMeshes = () => {
-    ensureMeshes(endpoints.length)
-    if (!endpointMesh || !endpointGlowMesh) return
-
     endpointMesh.count = endpoints.length
     endpointGlowMesh.count = endpoints.length
-    endpointGlowMesh.visible = visualMode === 'space'
+    endpointGlowMesh.visible = !isFlatLook()
     endpointRotation.identity()
 
     for (let index = 0; index < endpoints.length; index += 1) {
@@ -177,17 +171,22 @@ export const createEndpointLayer = (options: EndpointLayerOptions): EndpointLaye
       matrix.compose(endpoint.position, endpointRotation, endpointScale.setScalar(scale))
       endpointMesh.setMatrixAt(index, matrix)
       endpointGlowMesh.setMatrixAt(index, matrix)
-      endpointMesh.setColorAt(index, ROLE_COLORS[endpoint.role])
-      endpointGlowMesh.setColorAt(index, ROLE_GLOW_COLORS[endpoint.role])
+      endpointMesh.setColorAt(index, endpoint.direct ? DIRECT_COLOR : ROLE_COLORS[endpoint.role])
+      endpointGlowMesh.setColorAt(
+        index,
+        endpoint.direct ? DIRECT_GLOW_COLOR : ROLE_GLOW_COLORS[endpoint.role],
+      )
     }
 
     endpointMesh.instanceMatrix.needsUpdate = true
     endpointGlowMesh.instanceMatrix.needsUpdate = true
     if (endpointMesh.instanceColor) endpointMesh.instanceColor.needsUpdate = true
     if (endpointGlowMesh.instanceColor) endpointGlowMesh.instanceColor.needsUpdate = true
-    // hitTest 的 raycast 依赖包围球,实例集合变了要让它按新的 count 重算
-    endpointMesh.boundingSphere = null
-    endpointGlowMesh.boundingSphere = null
+    // Draw the beads above the arcs and the halos last, so the additive glow
+    // blends over everything already on screen.
+    endpointMesh.renderOrder = 5
+    endpointGlowMesh.renderOrder = 6
+    parent.add(endpointMesh, endpointGlowMesh)
   }
 
   return {
@@ -196,6 +195,7 @@ export const createEndpointLayer = (options: EndpointLayerOptions): EndpointLaye
 
       if (topologyChanged) {
         endpoints = snapshot.endpoints.map(cloneEndpoint)
+        projectEndpoints()
         rebuildMeshes()
       } else {
         const nextByKey = new Map(snapshot.endpoints.map((endpoint) => [endpoint.key, endpoint]))
@@ -206,6 +206,7 @@ export const createEndpointLayer = (options: EndpointLayerOptions): EndpointLaye
           if (next) {
             endpoint.city = next.city
             endpoint.country = next.country
+            endpoint.direct = next.direct
             endpoint.connections = next.connections
             endpoint.topHosts = next.topHosts.map((host) => ({ ...host }))
           }
@@ -214,13 +215,25 @@ export const createEndpointLayer = (options: EndpointLayerOptions): EndpointLaye
 
       return endpoints
     },
+    setView(nextView) {
+      if (
+        disposed ||
+        (view.projection === nextView.projection &&
+          view.centerLongitude === nextView.centerLongitude)
+      ) {
+        return
+      }
+      view = nextView
+      projectEndpoints()
+      rebuildMeshes()
+    },
     setVisualMode(mode) {
       if (disposed || visualMode === mode) return
       visualMode = mode
       if (endpointMesh) {
-        endpointMesh.material = mode === 'flat' ? flatEndpointMaterial : endpointMaterial
+        endpointMesh.material = isFlatLook() ? flatEndpointMaterial : endpointMaterial
       }
-      if (endpointGlowMesh) endpointGlowMesh.visible = mode === 'space'
+      if (endpointGlowMesh) endpointGlowMesh.visible = !isFlatLook()
     },
     setSunDirection(direction) {
       if (disposed) return
@@ -248,12 +261,12 @@ export const createEndpointLayer = (options: EndpointLayerOptions): EndpointLaye
       if (disposed) return
       disposed = true
       if (endpointMesh) {
-        earthGroup.remove(endpointMesh)
+        parent.remove(endpointMesh)
         endpointMesh.dispose()
         endpointMesh = null
       }
       if (endpointGlowMesh) {
-        earthGroup.remove(endpointGlowMesh)
+        parent.remove(endpointGlowMesh)
         endpointGlowMesh.dispose()
         endpointGlowMesh = null
       }

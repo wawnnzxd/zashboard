@@ -88,5 +88,5 @@ const renderLogs = computed(() => {
 // logs 是最新在前,所以最小 seq 在数组末尾。
 const minAliveLogSeq = computed(() => logs.value[logs.value.length - 1]?.seq)
 
-const logItemKey = (index: number) => renderLogs.value[index]?.seq ?? index
+const logItemKey = (item: unknown, index: number) => (item as LogWithSeq)?.seq ?? index
 </script>

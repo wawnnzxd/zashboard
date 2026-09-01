@@ -1,7 +1,8 @@
+// 只剩 Clash REST/WS 一种后端。字段保留是为了让旧记录的迁移与 URL 参数解析
+// 有个明确的落点,不必在每处都写字面量。
 export type BackendType = 'clash'
 
 export type Backend = {
-  // 后端登录类型只剩 Clash REST/WS API;字段保留是为了让旧记录原样通过迁移。
   type: BackendType
   protocol: string
   host: string
@@ -83,7 +84,7 @@ export type Rule = {
   proxy: string
   size: number
   uuid: string
-  // reFind
+  // sing-box-reFind
   disabled?: boolean
   // mihomo
   index: number
@@ -191,4 +192,19 @@ export interface NodeRank {
   Name: string
   Rank: string
   Weight: number
+}
+
+// honk core —— GET /stats 的用户态运行时快照。
+// 该端点还会返回就绪池 / warm 资源 / TCP / Score / UDP-NFQUEUE 等内部计量
+// (完整 schema 见 honk 仓库 doc/en/reference/api.md 的「GET /stats」一节),
+// 面板只取其中的出站统计,故这里只声明用得到的部分。
+export type HonkStats = {
+  outbounds: {
+    name: string
+    totalConns: number
+    activeConns: number
+    upload: number
+    download: number
+    errors: number
+  }[]
 }

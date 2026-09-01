@@ -1,4 +1,4 @@
-// 组装层 · config 门面。持有统一的 configs 状态,拉取与写入转交 clash 实现。
+// 组装层 · config 门面。持有统一的 configs 状态,转交 clash 实现。
 import type { Config } from '@/types'
 import { ref } from 'vue'
 import * as clash from './clash'

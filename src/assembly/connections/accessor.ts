@@ -1,8 +1,8 @@
 // 组装层 · connection 字段访问器。
-// ConnectionAccessor 直接从「原始数据」读取 / 派生 view 需要的字段。
-// createGetConnectionDisplayValue 基于某一份 accessor 生成对应后端的 getConnectionDisplayValue,
-// 由 index.ts 门面按当前后端动态选用。
-import { getGeoIPInfoSync } from '@/api/geoip'
+// ConnectionAccessor 直接从「原始数据」读取/派生 view 需要的字段。
+// createGetConnectionDisplayValue 基于该 accessor 生成 getConnectionDisplayValue,
+// 由 index.ts 门面暴露给 view。
+import { getConnectionGeoIPInfoSync } from '@/api/connectionGeoip'
 import { CONNECTIONS_TABLE_ACCESSOR_KEY, PROXY_CHAIN_DIRECTION } from '@/constant'
 import { getIPLabelFromMap } from '@/helper/sourceip'
 import { fromNow, prettyBytesHelper } from '@/helper/utils'
@@ -19,15 +19,13 @@ export type ConnectionDisplayOptions = {
 // store 直接消费,无需再做快照 diff(那只是 clash 全量快照的内部细节)。
 export interface ConnectionsSnapshot {
   // 当前活跃连接,已带瞬时速率(downloadSpeed/uploadSpeed)。
-  // **量纲:字节/秒**。各后端实现自行按本拍的真实推送间隔归一化 —— 推送节拍并不总是 1 秒
-  // (WS 重连、标签页节流后的追帧、后端负载抖动都会偏离),消费方拿不到也不需要知道节拍,
-  // 所以这个除法必须留在实现里,而不是让每个消费点各记一次。
+  // **速率量纲:字节/秒**。实现按本拍的真实推送间隔归一化 —— 推送节拍并不总是 1 秒
+  //(WS 重连、标签页节流后的追帧、后端负载抖动都会偏离),消费方无需知道节拍。
+  // 已关闭条目速率恒为 0,否则「全部」tab 按速率排序会把死连接顶到活跃连接前面。
   active: Connection[]
   // 本拍新关闭的连接(增量),供 store 追加进已关闭列表并落历史。
-  // 速率恒为 0(两个后端已对齐):否则已关闭条目会永久定格显示断开前最后一秒的速率,
-  // 在「全部」tab 按速率排序时把死连接顶到活跃连接前面。
   closed: Connection[]
-  // 内核自启动的上/下行累计。clash 的连接 WS 消息原生携带,在此透传;
+  // 内核自启动的上/下行累计,由连接 WS 消息原生携带,在此透传。
   downloadTotal?: number
   uploadTotal?: number
 }
@@ -53,9 +51,8 @@ export interface ConnectionAccessor {
   inboundUser(connection: Connection): string
   sniffHost(connection: Connection): string
   remoteAddress(connection: Connection): string
-  // clash 无对应数据时返回空串(展示为 '-')。
-  protocol(connection: Connection): string
-  // smart 降级标记
+  isDirect(connection: Connection): boolean
+  // smart 内核的降级标记;非 smart 时为 undefined。
   smartBlock(connection: Connection): string | undefined
 }
 
@@ -126,7 +123,9 @@ export const createGetConnectionDisplayValue =
       case CONNECTIONS_TABLE_ACCESSOR_KEY.DestinationType:
         return getDestinationType(accessor.destination(connection))
       case CONNECTIONS_TABLE_ACCESSOR_KEY.GeoIP: {
-        const { country, organization } = getGeoIPInfoSync(accessor.destination(connection))
+        const { country, organization } = getConnectionGeoIPInfoSync(
+          accessor.destination(connection),
+        )
 
         return [country, organization].filter(Boolean).join(' / ')
       }
@@ -134,8 +133,6 @@ export const createGetConnectionDisplayValue =
         return accessor.remoteAddress(connection) || '-'
       case CONNECTIONS_TABLE_ACCESSOR_KEY.InboundUser:
         return accessor.inboundUser(connection)
-      case CONNECTIONS_TABLE_ACCESSOR_KEY.Protocol:
-        return accessor.protocol(connection) || '-'
       case CONNECTIONS_TABLE_ACCESSOR_KEY.Close:
         return ''
     }

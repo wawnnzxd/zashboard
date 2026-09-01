@@ -15,6 +15,15 @@
         <p class="text-sm break-all whitespace-pre-wrap">
           {{ confirmDialogState.message }}
         </p>
+        <a
+          v-if="confirmDialogState.link"
+          class="link link-primary mt-2 inline-block text-sm"
+          :href="confirmDialogState.link.url"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          {{ confirmDialogState.link.text }}
+        </a>
       </div>
       <div class="flex shrink-0 items-center justify-end gap-2">
         <label
@@ -65,14 +74,14 @@ watch(confirmDialogState, () => {
 const handleModelValue = (value: boolean | undefined) => {
   if (value) return
 
-  handleCancel()
+  resolveConfirmDialog('dismiss', checked.value)
 }
 
 const handleCancel = () => {
-  resolveConfirmDialog(false, checked.value)
+  resolveConfirmDialog('cancel', checked.value)
 }
 
 const handleConfirm = () => {
-  resolveConfirmDialog(true, checked.value)
+  resolveConfirmDialog('confirm', checked.value)
 }
 </script>

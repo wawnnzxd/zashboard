@@ -16,9 +16,9 @@ export type SettingsCategory = {
 }
 
 export const DEFAULT_SETTINGS_MENU_ORDER = [
+  SETTINGS_MENU_KEY.backend,
   SETTINGS_MENU_KEY.general,
   SETTINGS_MENU_KEY.overview,
-  SETTINGS_MENU_KEY.backend,
   SETTINGS_MENU_KEY.proxies,
   SETTINGS_MENU_KEY.connections,
 ]
@@ -174,6 +174,12 @@ export const SETTINGS_CATEGORIES: SettingsCategory[] = [
         key: `${SETTINGS_MENU_KEY.general}.zashboardSettings.emoji`,
         label: 'emoji',
         section: 'appearance',
+      },
+      {
+        key: `${SETTINGS_MENU_KEY.general}.zashboardSettings.customCSS`,
+        label: 'customCSS',
+        section: 'appearance',
+        keywords: ['css', 'style'],
       },
       {
         key: `${SETTINGS_MENU_KEY.general}.zashboardSettings.language`,

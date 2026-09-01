@@ -1,6 +1,5 @@
 <!--
-  后端连接参数的表单字段。新增与编辑共用同一份 —— 两处字段本就该一致,
-  分成两份的结果是编辑界面连 type 都改不了。
+  后端连接参数的表单字段。新增与编辑共用同一份 —— 两处字段本就该一致。
 
   disableUpgradeCore / disableTunMode 有意不在这里出现:它们是给通过 URL 参数
   下发后端的场景用的(见 getBackendFromUrl),由分发方决定藏掉哪些功能,
@@ -43,10 +42,7 @@
       </div>
     </div>
 
-    <div
-      v-if="model.type === 'clash'"
-      class="flex flex-col gap-1"
-    >
+    <div class="flex flex-col gap-1">
       <label class="flex items-center gap-1 text-sm">
         <span>{{ $t('secondaryPath') }} ({{ $t('optional') }})</span>
         <span

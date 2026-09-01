@@ -9,9 +9,9 @@ const ru: LANG_MESSAGE = {
   connections: 'Подключения',
   logs: 'Журнал',
 
-  // Backend type
+  // Common states and labels
   default: 'По умолчанию',
-  // Общие статусы и метки
+  skip: 'Пропустить',
   online: 'В сети',
   offline: 'Не в сети',
   statusLabel: 'Состояние',
@@ -21,6 +21,7 @@ const ru: LANG_MESSAGE = {
   addRow: 'Добавить строку',
   connected: 'Подключено',
   copy: 'Копировать',
+
   // Shared labels and actions
   protocol: 'Протокол',
   host: 'Хост',
@@ -35,7 +36,6 @@ const ru: LANG_MESSAGE = {
   uploadSpeed: 'Скорость отдачи',
   memoryUsage: 'Память',
   noData: 'Нет данных',
-  refreshToUpdate: 'Доступна новая версия — нажмите, чтобы обновить',
 
   // Backend actions and feedback
   flushFakeIP: 'Очистить Fake IP',
@@ -46,10 +46,21 @@ const ru: LANG_MESSAGE = {
   restartCoreSuccess: 'Ядро успешно перезапущено',
   reloadConfigsSuccess: 'Конфигурации успешно перезагружены',
   updateGeoSuccess: 'Geo база данных успешно обновлена',
+  actionRunning: '{action}: выполняется…',
   chains: 'Цепочки',
   outbound: 'Исходящий',
   proxyGroup: 'Группа прокси',
   sortBy: 'Сортировать по',
+  sortAToZ: 'А → Я',
+  sortZToA: 'Я → А',
+  sortLargestFirst: 'Сначала большие',
+  sortSmallestFirst: 'Сначала малые',
+  sortNewestFirst: 'Сначала новые',
+  sortOldestFirst: 'Сначала старые',
+  groupBy: 'Группировать по',
+  noGrouping: 'Без группировки',
+  expandAllGroups: 'Развернуть все группы',
+  collapseAllGroups: 'Свернуть все группы',
   rule: 'Правило',
   sourceIP: 'Исходный IP',
   activeConnections: 'Активные',
@@ -166,6 +177,9 @@ const ru: LANG_MESSAGE = {
   ruleSettings: 'Настройки правил',
   connectionDetails: 'Детали подключения',
   customTheme: 'Пользовательская тема',
+  customCSS: 'Пользовательский CSS',
+  customCSSTip:
+    'Указанные стили встраиваются в страницу как есть. Некорректные правила могут сломать вёрстку.',
   unavailableProxy: 'Скрыть недоступное',
   protocolTips:
     'Вы пытаетесь подключиться к HTTP-бэкенду, но Desire предоставляется через HTTPS. Это может вызвать ошибки подключения. Разрешите небезопасный контент в настройках браузера или используйте HTTP-версию панели, например, http://board.zash.run.place.',
@@ -334,6 +348,7 @@ const ru: LANG_MESSAGE = {
     'В бэкенде сохранены настройки, которые перезапишут следующие локальные настройки:\n\n{keys}\n\nПрименить их?',
   importSettingsConfirm:
     'Импортированные настройки перезапишут следующие локальные настройки:\n\n{keys}\n\nПрименить их?',
+  importFileFailed: 'Импорт не удался: {file} не является файлом настроек',
   dontAskAgainAlwaysApply: 'Больше не спрашивать, применять автоматически',
   confirmBeforeOverride: 'Подтверждать перезапись локальных настроек',
   deleteUploadedSettingsSuccess: 'Загруженные настройки успешно удалены',
@@ -372,7 +387,6 @@ const ru: LANG_MESSAGE = {
   importFromBackendTip:
     'По умолчанию ./zashboard-settings.json находится в папке ui. Пожалуйста, убедитесь, что папка ui существует и содержит файл конфигурации.',
   importFailed: 'Импорт не выполнен, проверьте url {url}',
-  importFileFailed: 'Импорт не удался: {file} не является файлом настроек',
   autoImportFromUrl: 'Автоматический импорт',
   autoImportFromUrlTip:
     'При включении настройки будут автоматически импортироваться из url при открытии Desire. Если хэш отличается от последнего импортированного хэша, настройки будут импортированы заново и страница будет обновлена.',
@@ -401,6 +415,7 @@ const ru: LANG_MESSAGE = {
   topologyCharts: 'Топологические графики',
   earthGlobeCard: 'Глобальные подключения',
   earthGlobeTitle: 'Глобальные подключения',
+  earthProjection: 'Проекция',
   earthVisualStyle: 'Стиль глобуса',
   earthVisualStyle_space: 'Космос',
   earthVisualStyle_flat: 'Плоский',
@@ -414,6 +429,8 @@ const ru: LANG_MESSAGE = {
   earthExpand: 'Развернуть глобус',
   earthCollapse: 'Восстановить размер глобуса',
   earthConnectionLine: 'Маршрут подключения',
+  earthLegend: 'Легенда точек',
+  earthLegendProxied: 'Через прокси',
   earthDatabaseChecking: 'Проверка локальной базы городов…',
   earthDatabaseLoading: 'Загрузка базы городов из кэша…',
   earthDatabaseConsentTitle: 'Скачать локальную базу городов?',
@@ -442,6 +459,10 @@ const ru: LANG_MESSAGE = {
   retry: 'Повторить',
   connectionHistory: 'История подключений',
   ruleHitCountCard: 'Статистика попаданий/промахов правил',
+  honkStatsCard: 'Статистика выполнения honk',
+  honkStatsOutbounds: 'Исходящие',
+  honkStatsActiveConns: 'Активные',
+  honkStatsErrors: 'Ошибки',
   latency: 'Задержка',
   icon: 'Иконка',
   settingsMenuGeneral: 'Общие',
