@@ -91,7 +91,7 @@
 <script setup lang="ts" generic="T = unknown">
 import { useFloatingMenu } from '@/composables/floatingMenu'
 import { CheckIcon } from '@heroicons/vue/24/outline'
-import { isEqual } from 'lodash'
+import { isEqual } from 'lodash-es'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, useAttrs, useId, watch } from 'vue'
 
 export type SelectOption<T = unknown> = {

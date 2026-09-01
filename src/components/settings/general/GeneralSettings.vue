@@ -193,7 +193,7 @@
 </template>
 
 <script setup lang="ts">
-import { showDisplayAllFeatures } from '@/assembly/backend'
+import { can, showDisplayAllFeatures } from '@/assembly/backend'
 import { upgradeUIAPI } from '@/assembly/version'
 import DashboardSettings from '@/components/common/DashboardSettings.vue'
 import SelectInput from '@/components/common/SelectInput.vue'

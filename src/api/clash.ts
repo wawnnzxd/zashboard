@@ -22,8 +22,8 @@ import type {
   Rule,
   RuleProvider,
 } from '@/types'
-import axios from 'axios'
 import type { AxiosRequestConfig } from 'axios'
+import axios from 'axios'
 import { debounce } from 'lodash-es'
 import ReconnectingWebSocket from 'reconnectingwebsocket'
 import { shallowRef } from 'vue'
@@ -38,6 +38,10 @@ export const fetchClashVersion = () => axios.get<{ version: string }>('/version'
 // 真正 abort 在途请求、释放并发槽(旧后端不可达时请求会挂 30-75 秒)。
 export const fetchProxiesAPI = (config?: AxiosRequestConfig) => {
   return axios.get<{ proxies: Record<string, Proxy> }>('/proxies', config)
+}
+
+export const fetchSingleProxyAPI = (name: string) => {
+  return axios.get<Proxy>(`/proxies/${encodeURIComponent(name)}`)
 }
 
 export const selectProxyAPI = (proxyGroup: string, name: string) => {
@@ -285,6 +289,14 @@ export const fetchSmartWeightsAPI = () => {
     message: string
     weights: Record<string, NodeRank[]>
   }>(`/group/weights`)
+}
+
+// deprecated
+export const fetchSmartGroupWeightsAPI = (proxyName: string) => {
+  return axios.get<{
+    message: string
+    weights: NodeRank[]
+  }>(`/group/${encodeURIComponent(proxyName)}/weights`)
 }
 
 export const flushSmartGroupWeightsAPI = () => {

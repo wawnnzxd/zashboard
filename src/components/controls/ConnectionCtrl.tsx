@@ -24,7 +24,6 @@ import {
   connectionFilter,
   connectionSortDirection,
   connectionSortType,
-  connections,
   isClosedConnection,
   isPaused,
   quickFilterEnabled,

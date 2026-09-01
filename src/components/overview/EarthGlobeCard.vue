@@ -333,7 +333,7 @@
 </template>
 
 <script setup lang="ts">
-import { MASKED_IP } from '@/composables/publicIP'
+import { MASKED_IP } from '@/composables/overview'
 import SegmentedControl from '@/components/common/SegmentedControl.vue'
 import SelectInput from '@/components/common/SelectInput.vue'
 import { queryDNSAPI } from '@/assembly/config'
@@ -698,6 +698,8 @@ const handleWorkerMessage = ({ data }: MessageEvent<GeoWorkerResponse>) => {
     lookupRequests.delete(data.id)
     return
   }
+  // activity(下载起止)由 geoWorkerHost 内部消费,用于下载期间不回收 Worker;卡片不关心
+  if (data.type !== 'status') return
 
   databaseStatus.value = data.status
   if (data.error) databaseError.value = data.error

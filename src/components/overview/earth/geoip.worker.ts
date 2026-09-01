@@ -6,8 +6,8 @@ import {
   type GeoIPFileManifest,
 } from '@/helper/geoipChunkStore'
 import { AsyncMMDBReader } from '@/helper/mmdb'
-import { CITY_ZH } from './cityNames.zh'
 import type { CityResponse } from 'mmdb-lib'
+import { CITY_ZH } from './cityNames.zh'
 import {
   DBIP_CITY_URL,
   DBIP_STORED_BYTES,
