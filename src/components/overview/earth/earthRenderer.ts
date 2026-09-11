@@ -137,7 +137,10 @@ export const createEarthRenderer = async (
     // the origin over the transition rather than snapping at the end of it.
     const targetFrom = new THREE.Vector3()
     const orbitCameraPosition = camera.position.clone()
-    const clock = new THREE.Clock()
+    // three r171+ 把 Clock 标记为废弃(每次初始化都在控制台刷一条告警),换成 Timer:
+    // 每帧先 update(带上 rAF 时间戳)再取 getDelta;暂停不需要 stop,恢复时 reset 一下
+    // 让第一帧的 delta 从恢复那一刻起算,而不是把整个暂停时长灌进路线动画。
+    const timer = new THREE.Timer()
     const sunDirection = getRealtimeSunDirection()
 
     const globeLayer = await createGlobeLayer({
@@ -285,10 +288,11 @@ export const createEarthRenderer = async (
       if (progress >= 1) finishMorph()
     }
 
-    const animate = () => {
+    const animate = (time?: number) => {
       if (disposed) return
 
-      const elapsed = clock.getDelta()
+      timer.update(time)
+      const elapsed = timer.getDelta()
       const delta = Math.min(0.05, elapsed)
 
       if (morphing) {
@@ -315,7 +319,6 @@ export const createEarthRenderer = async (
       if (disposed) return
 
       renderer.setAnimationLoop(null)
-      clock.stop()
 
       // Without a running loop there is nothing to drive the morph, so settle it
       // immediately rather than leaving the overlays hidden mid-transition.
@@ -330,7 +333,7 @@ export const createEarthRenderer = async (
         render()
       } else {
         controls.enableDamping = true
-        clock.start()
+        timer.reset()
         renderer.setAnimationLoop(animate)
       }
     }

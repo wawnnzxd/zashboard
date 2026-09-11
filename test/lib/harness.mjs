@@ -84,8 +84,15 @@ export const startHarness = async ({
     // 计时起点定在这里:seed 与冷启动不算用户的等待,「刷新代理页到看见卡片」才是
     const navigationStartedAt = Date.now()
 
-    await page.goto(`${app.url}/#/proxies`)
-    await page.reload()
+    /*
+     * 不能「先 goto('#/proxies') 再 reload()」:只改 hash 是同文档导航,路由守卫会在
+     * 这个早已启动的旧文档里跑 —— 它手里的 useStorage 引用还是 seed 之前读到的空列表
+     * (同窗口的 localStorage.setItem 不触发 storage 事件),于是把地址推去 /setup;
+     * 这个 push 是异步的,和紧随其后的 reload 赛跑,赢了就让新文档从 #/setup 启动,
+     * 而守卫只会「无后端 → setup」,从不把有后端的页面从 setup 送回去,验证就卡死在那里。
+     * 换成一次带唯一 query 的整页导航:新文档从头读 storage,守卫看到的就是 seed 后的后端。
+     */
+    await page.goto(`${app.url}/?boot=${navigationStartedAt}#/proxies`)
 
     const proxiesPage = withProxiesHelpers(page)
 
@@ -103,9 +110,15 @@ export const startHarness = async ({
     if (ready === null) {
       const href = await page.evaluate('location.href')
       const text = await page.evaluate('document.body.innerText.slice(0, 200)')
+      // 停在 /setup 时最想知道的是:seed 进去的后端配置还在不在 —— 直接把 setup/ 键原样打出来
+      const storage = await page.evaluate(
+        `JSON.stringify(Object.fromEntries(Object.keys(localStorage).filter((k) => k.startsWith('setup/')).map((k) => [k, localStorage.getItem(k)])))`,
+      )
 
       await page.close()
-      throw new Error(`代理页没能打开(${href})\n页面上是:${text.replace(/\n/g, ' | ')}`)
+      throw new Error(
+        `代理页没能打开(${href})\n页面上是:${text.replace(/\n/g, ' | ')}\nlocalStorage(setup/*):${storage}`,
+      )
     }
 
     return proxiesPage

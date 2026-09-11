@@ -206,6 +206,19 @@ export const createMockServer = async ({
     if (pathname === '/providers/rules') return json(res, { providers: {} })
     if (pathname === '/rules') return json(res, { rules: [] })
 
+    // 单个代理(面板点选节点后只刷新这一条,不再全量拉 /proxies)
+    const singleMatch = pathname.match(/^\/proxies\/([^/]+)$/)
+    if (singleMatch && req.method === 'GET') {
+      const proxy = proxies[decodeURIComponent(singleMatch[1])]
+
+      if (!proxy) {
+        res.writeHead(404, { 'content-type': 'application/json' })
+        return res.end('{"message":"proxy not found"}')
+      }
+
+      return json(res, proxy)
+    }
+
     // 单节点测速会更新内核里的 history,随后页面重新 GET /proxies 才能看到排序变化。
     // mock 也保留这个语义,否则只能测到请求成功,覆盖不到「测速后重排」这条真实链路。
     const testedProxyName = (() => {
@@ -222,7 +235,26 @@ export const createMockServer = async ({
       ]
     }
 
-    // 测速类端点(节点 / 组 / provider healthcheck)
+    // 整组测速:内核真实返回的是 Record<节点名, 延迟>(超时的节点不出现在结果里),
+    // 同时把每个节点的 history 写成本次结果。返回值只给一个 { delay } 的话,
+    // 直接拿结果本地写入的实现会把整组当成全部超时,和真实内核的行为对不上。
+    const groupMatch = pathname.match(/^\/group\/([^/]+)\/delay$/)
+    if (groupMatch) {
+      const group = proxies[decodeURIComponent(groupMatch[1])]
+      const result = {}
+
+      for (const name of group?.all ?? []) {
+        const node = proxies[name]
+
+        if (!node?.history) continue
+        node.history = [{ time: new Date().toISOString(), delay: control.latencyValue }]
+        result[name] = control.latencyValue
+      }
+
+      return setTimeout(() => json(res, result), control.latencyDelayMs)
+    }
+
+    // 测速类端点(节点 / provider healthcheck)
     if (pathname.endsWith('/delay') || pathname.includes('/healthcheck')) {
       return setTimeout(() => json(res, { delay: control.latencyValue }), control.latencyDelayMs)
     }

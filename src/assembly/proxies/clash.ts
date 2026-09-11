@@ -154,9 +154,21 @@ export const invalidateProxies = () => proxiesResource.invalidate()
 // 点选后只刷新该组(GET /proxies/{name},1-2KB):原实现每次点选 fire-and-forget
 // 全量重拉 /proxies + /providers/proxies(千节点 0.5~3MB),且"已选中"分支读的是
 // 重拉前捕获的旧对象引用,判断恒真、重拉结果从未被使用。
+// 单点刷新的响应必须真的是这个代理:GET /proxies/:name 在不实现该端点的后端
+// (mock、部分 fork 核)上会 404 或回一个别的 JSON,原样写进 proxyMap 会把这条记录
+// 换成没有 type 的残缺对象,依赖 type 的渲染(ProxyGroupNow 等)当场抛错、整张卡被卸载。
+const isProxyRecord = (name: string, data: unknown): data is Proxy =>
+  !!data &&
+  typeof data === 'object' &&
+  (data as Proxy).name === name &&
+  typeof (data as Proxy).type === 'string'
+
 const refreshSingleProxy = async (name: string) => {
   try {
     const { data } = await fetchSingleProxyAPI(name)
+
+    if (!isProxyRecord(name, data)) return
+
     const oldNode = proxyMap.value[name]
 
     if (!oldNode || JSON.stringify(oldNode) !== JSON.stringify(data)) {

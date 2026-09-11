@@ -162,7 +162,7 @@ try {
   await page.scrollTo(0)
   await sleep(500)
   await page.evaluate(`(() => {
-    const input = document.querySelector('input[placeholder*="earch"]')
+    const input = document.querySelector('input[placeholder*="earch"], input[placeholder*="搜索"]')
     const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set
     setter.call(input, 'Group-01')
     input.dispatchEvent(new Event('input', { bubbles: true }))
@@ -180,7 +180,7 @@ try {
   )
 
   await page.evaluate(`(() => {
-    const input = document.querySelector('input[placeholder*="earch"]')
+    const input = document.querySelector('input[placeholder*="earch"], input[placeholder*="搜索"]')
     const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set
     setter.call(input, '')
     input.dispatchEvent(new Event('input', { bubbles: true }))
@@ -208,6 +208,15 @@ try {
   const groupState = () =>
     page.evaluateJson(`(() => {
       const card = document.querySelector('[data-group-name="${SELECTOR_GROUP}"]')
+      if (!card) {
+        const scroller = document.querySelector('.proxies-scrollable-parent') ?? document.scrollingElement
+        return JSON.stringify({
+          now: '', latency: '', missing: true,
+          scrollTop: scroller?.scrollTop, scrollerClass: scroller?.className?.toString().slice(0, 60),
+          rendered: [...document.querySelectorAll('[data-group-name]')].map((e) => e.dataset.groupName),
+          errs: window.__verifyErrs ?? [],
+        })
+      }
       return JSON.stringify({
         now: card.innerText.split('\\n').find((line) => line.startsWith('Node-')) ?? '',
         latency: (card.querySelector('.latency-tag')?.innerText ?? '').trim(),
@@ -215,6 +224,15 @@ try {
     })()`)
 
   // ① 乐观改 now:切节点时 proxyMap 的引用不变,只改了组的 now 字段
+  await page.evaluate(`(() => {
+    window.__verifyErrs = []
+    addEventListener('error', (e) => __verifyErrs.push('error: ' + e.message))
+    addEventListener('unhandledrejection', (e) => __verifyErrs.push('rejection: ' + String(e.reason).slice(0, 300)))
+    const ce = console.error
+    console.error = (...a) => { __verifyErrs.push('console: ' + a.map((x) => (x && x.stack) || String(x)).join(' ').slice(0, 400)); ce(...a) }
+    const cw = console.warn
+    console.warn = (...a) => { __verifyErrs.push('warn: ' + a.map(String).join(' ').slice(0, 200)); cw(...a) }
+  })()`)
   const before = await groupState()
   const picked = expanded.find((node) => node.name !== before.now && node.latency)
 
@@ -228,10 +246,15 @@ try {
 
   const afterSelect = await groupState()
 
+  // 组头延迟必须跟到新 now 节点:要么与切换前不同,要么恰好等于该节点卡片上的延迟
+  //(mock 每次 GET /proxies 会把所有节点刷成同一个值;只刷新单条记录的实现不会让它「滚」一格,
+  // 但组头显示的正是新节点自己的延迟,这才是这条检查真正要的语义)
   check(
     '切换节点后组头部跟着换延迟',
-    afterSelect.now === picked?.name && afterSelect.latency !== before.latency,
-    `${before.now} ${before.latency} → ${afterSelect.now} ${afterSelect.latency}`,
+    afterSelect.now === picked?.name &&
+      afterSelect.latency !== '' &&
+      (afterSelect.latency !== before.latency || afterSelect.latency === picked?.latency),
+    `${JSON.stringify(before)} → ${JSON.stringify(afterSelect)}`,
   )
 
   // ② 往 history push:面板测速模式下逐个节点乐观写入,同样不换 proxyMap 引用。
@@ -329,7 +352,7 @@ try {
       return originalScrollTo.apply(this, args)
     }
 
-    const input = document.querySelector('input[placeholder*="earch"]')
+    const input = document.querySelector('input[placeholder*="earch"], input[placeholder*="搜索"]')
     const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set
     setter.call(input, '${SELECTOR_GROUP}')
     input.dispatchEvent(new Event('input', { bubbles: true }))

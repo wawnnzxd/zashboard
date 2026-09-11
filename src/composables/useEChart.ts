@@ -133,7 +133,12 @@ export const useEChart = (
     chart.value.setOption(gatedData.value, { lazyUpdate: true })
   }
 
-  const resize = debounce(() => chart.value?.resize(), 100)
+  const resize = debounce(() => {
+    // 藏起来的容器(设置页里 v-show 掉的分类、display:none 的卡片)量出来是 0×0:
+    // 这时 resize 只会让 ECharts 打一条「拿不到宽高」告警并白做一轮布局,等重新量到尺寸再做
+    if (!width.value || !height.value) return
+    chart.value?.resize()
+  }, 100)
 
   const removeTouchListener = () => {
     touchTarget?.removeEventListener('touchend', hideTooltip)
@@ -159,7 +164,10 @@ export const useEChart = (
   // 开门即补一拍:render 是幂等的,门关期间上游有没有变过都不必区分
   // (变过的话上面那两个 watch 也会因为引用变化而触发,重复一次 setOption 无副作用)。
   watch(closed, (isClosed) => {
-    if (!isClosed) render()
+    if (isClosed) return
+
+    ensureChart()
+    render()
   })
   watch([width, height], resize)
   watch(isMiddleScreen, syncTouchListener)
@@ -167,12 +175,22 @@ export const useEChart = (
     watch(isEmpty, render)
   }
 
-  onMounted(() => {
-    if (!chartRef.value) return
+  // 建实例推迟到「门第一次打开」:藏着的容器(设置页 v-show 起来的分类里的预览图、
+  // 还没滚进视口的卡片)是 0×0 的,此时 init 只换来一条 ECharts 告警和一份等着 resize 的空画布,
+  // 设置页一进去就白建三张。useElementVisibility 首值为 false,所以即便元素一挂出来就可见,
+  // 也是 IntersectionObserver 首次回调时才建 —— 晚一帧,但每张图只建一次、建在有尺寸的容器上。
+  const ensureChart = () => {
+    if (chart.value || !chartRef.value) return
 
     chart.value = echarts.init(chartRef.value)
     removeInitListeners = onInit?.(chart.value) || undefined
     syncTouchListener()
+  }
+
+  onMounted(() => {
+    if (closed.value) return
+
+    ensureChart()
     render()
   })
 

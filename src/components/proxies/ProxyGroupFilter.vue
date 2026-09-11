@@ -11,7 +11,7 @@
       <MagnifyingGlassIcon class="h-3.5 w-3.5" />
     </button>
     <div
-      class="relative min-w-0 flex-1 overflow-hidden transition-all duration-200 ease-out"
+      class="relative min-w-0 flex-1 overflow-hidden transition-all duration-200 ease-out motion-reduce:transition-none"
       :class="showInput ? 'max-w-32 opacity-100' : 'max-w-0 opacity-0'"
     >
       <input

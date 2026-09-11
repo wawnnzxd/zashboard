@@ -80,7 +80,11 @@ try {
       assert.equal(card.transitioning, false)
       assert.equal(card.height, '')
       assert.equal(card.bodyHeight, '')
-      assert.equal(card.animations, 0, '交接后应释放动画对象')
+      assert.equal(
+        card.animations,
+        0,
+        '交接后应释放动画对象:' + JSON.stringify(card.animationStates),
+      )
       assert.equal(card.preview, !expected[index])
       assert.equal(card.rows > 0, expected[index])
     }
@@ -195,7 +199,7 @@ try {
   await page.evaluate(`(() => {
     document.querySelector('.collapse-motion-header').click()
     setTimeout(() => {
-      const input = document.querySelector('input[placeholder*="earch"]')
+      const input = document.querySelector('input[placeholder*="earch"], input[placeholder*="搜索"]')
       Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, '__no_matching_group__')
       input.dispatchEvent(new Event('input', { bubbles: true }))
     }, 100)
