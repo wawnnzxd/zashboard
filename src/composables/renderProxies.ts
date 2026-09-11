@@ -1,4 +1,4 @@
-import { getLatencyByName, proxyMap, proxyProviederList } from '@/assembly/proxies'
+import { latencyMapOf, proxyMap, proxyProviederList, type LatencyMap } from '@/assembly/proxies'
 import { NOT_CONNECTED, PROXY_SORT_TYPE } from '@/constant'
 import { isProxyGroup } from '@/helper'
 import {
@@ -10,8 +10,6 @@ import {
 import { smartOrderMap } from '@/store/smart'
 import { computed, type ComputedRef } from 'vue'
 import { isProxyNodeSearchMode, matchProxySearchKeyword, proxySearchKeyword } from './proxySearch'
-
-type LatencyMap = Map<string, number>
 
 export type ProxiesProviderSection = {
   providerName: string
@@ -63,35 +61,31 @@ export const groupProxiesByProviderName = (proxies: string[]): ProxiesProviderSe
 const isSameList = (prev: string[], next: string[]) =>
   prev.length === next.length && prev.every((name, index) => name === next[index])
 
+// 延迟一律取自 assembly 的全局延迟表(按测速 url 分桶),这里只负责筛选与排序。
 export function useRenderProxyList(proxies: ComputedRef<string[]>, groupName?: string) {
-  // 卡片挂在 <TransitionGroup> 下,而 shouldUpdateComponent 的第一条实质判断就是
-  // `if (nextVNode.dirs || nextVNode.transition) return true`(排在 patchFlag 之前),
-  // 所以只要这个数组换引用,视野内每张卡片都会完整重渲染 —— props 再稳也拦不住。
-  // 排序/过滤路径每次都 filter/concat/sort 出新数组,测速潮里每 200ms 换一次 proxyMap,
-  // 结果却逐字相同。逐项 O(N) 比较远比一次全组重渲染便宜:内容没变就复用旧引用,
-  // 上游 computed 的 hasChanged 直接短路,下游一个都不会被触发。
-  // 内容真变了(按延迟排序顺序变化)照常产出新数组,FLIP 过渡不受影响。
+  const latencyMap = latencyMapOf(groupName)
+
+  // 内容级 memo:测速潮里延迟表每 200ms 作废一次,过滤/排序每次都产出新数组,
+  // 而结果往往逐字相同。内容没变就复用旧引用 —— 下游 computed 的 hasChanged 直接短路,
+  // 虚拟列表也不必为一个「看起来变了」的数组重新对账。真变了(按延迟排序顺序变化)照常换引用。
   let prevList: string[] = []
-  const result = computed(() => {
-    const { list, latencyMap } = getRenderProxies(proxies.value, groupName)
+  const renderProxies = computed(() => {
+    const filtered = filterProxies(proxies.value, groupName, latencyMap.value)
+    const list = sortProxies(filtered, groupName, latencyMap.value)
 
     if (!isSameList(prevList, list)) {
       prevList = list
     }
 
-    return { list: prevList, latencyMap }
+    return prevList
   })
 
-  const renderProxies = computed(() => result.value.list)
-
-  // 延迟在 getRenderProxies 里已经按整组算过一遍(每个 name 都要沿 now 链走 map),
-  // 复用同一份 latencyMap,不再为了数个数把整条链路重走一次。
   const proxiesCount = computed(() => {
-    const { list, latencyMap } = result.value
+    const latencies = latencyMap.value
     let available = 0
 
-    for (const name of list) {
-      if (latencyMap.get(name) !== NOT_CONNECTED) {
+    for (const proxy of renderProxies.value) {
+      if ((latencies.get(proxy) ?? NOT_CONNECTED) !== NOT_CONNECTED) {
         available++
       }
     }
@@ -102,15 +96,6 @@ export function useRenderProxyList(proxies: ComputedRef<string[]>, groupName?: s
   return { renderProxies, proxiesCount }
 }
 
-const getRenderProxies = (proxies: string[], groupName: string | undefined) => {
-  const latencyMap: LatencyMap = new Map(
-    proxies.map((name) => [name, getLatencyByName(name, groupName)]),
-  )
-  const filtered = filterProxies(proxies, groupName, latencyMap)
-
-  return { list: sortProxies(filtered, groupName, latencyMap), latencyMap }
-}
-
 const filterProxies = (
   proxies: string[],
   groupName: string | undefined,
@@ -119,7 +104,9 @@ const filterProxies = (
   let result = proxies
 
   if (hideUnavailableProxies.value) {
-    result = result.filter((name) => isProxyGroup(name) || latencyMap.get(name)! > NOT_CONNECTED)
+    result = result.filter(
+      (name) => isProxyGroup(name) || (latencyMap.get(name) ?? NOT_CONNECTED) > NOT_CONNECTED,
+    )
   }
 
   if (isProxyNodeSearchMode.value && proxySearchKeyword.value) {
@@ -164,8 +151,9 @@ const sortBySmartOrder = (proxies: string[], orderMap: Record<string, number>) =
 
 const getSortFunc = (sortType: PROXY_SORT_TYPE, latencyMap: LatencyMap) => {
   const latencyFor = (name: string) => {
-    const latency = latencyMap.get(name)!
-    return latency === 0 ? Infinity : latency
+    const latency = latencyMap.get(name) ?? NOT_CONNECTED
+
+    return latency === NOT_CONNECTED ? Infinity : latency
   }
   switch (sortType) {
     case PROXY_SORT_TYPE.NAME_ASC:

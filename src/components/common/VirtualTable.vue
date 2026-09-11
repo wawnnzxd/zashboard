@@ -124,6 +124,7 @@ const props = withDefaults(
     columns: ColumnDef<T>[]
     // 排序状态落盘的 key,同一个表格换页面回来还在
     sortingKey: string
+    initialSorting?: SortingState
     // 行高:既喂给虚拟器记账,也直接写成 tr 的行内 height。tr 的 height 只是下限,
     // 内容更高就撑开 —— 所以这个值必须 >= 本表最高的一行(单元格 padding + 最高内容),
     // 否则虚拟器按低值记账,内容滚得比滚动条快、每滚过一行错一次台阶。
@@ -155,7 +156,7 @@ const emits = defineEmits<{
 
 const { t } = useI18n()
 
-const sorting = useStorage<SortingState>(props.sortingKey, [])
+const sorting = useStorage<SortingState>(props.sortingKey, () => props.initialSorting ?? [])
 
 // 排序状态按列 id 落盘,而列可能被 columnVisibility 隐藏(内核不提供 hitCount 时就会)。
 // 隐藏列上的排序照样生效,可表头没有箭头 —— 用户既看不出来也点不掉。把「排序只作用于

@@ -28,7 +28,7 @@ const SPEED_INTERVAL_MAX_MS = 3000
 // 协议固有的内部细节,在此完成,对外只暴露统一的 ConnectionsSnapshot。
 //
 // 量纲约定(ConnectionsSnapshot 的一部分):产出的 downloadSpeed/uploadSpeed 单位是**字节/秒**,
-// 不是「相邻两拍的字节差」。全部下游(表格 DlSpeed 列、chainTrafficMap 喂代理组头、速率排序键、
+// 不是「相邻两拍的字节差」。全部下游(表格 DlSpeed 列、proxyGroupTraffic 喂代理组头、速率排序键、
 // 地球仪流光强度)本来就按「/s」解释这两个字段,而推送节拍只在理想情况下正好是 1 秒。把「除以
 // 本拍真实间隔」吃进这里,下游既不必知道、也无从知道节拍,契约才是自洽的。
 export const fetchConnectionsAPI = () => {

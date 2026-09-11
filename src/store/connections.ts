@@ -12,7 +12,6 @@ import {
 } from '@/constant'
 import {
   getChainsStringFromConnection,
-  getConnectionChains,
   getConnectionDownload,
   getConnectionNetwork,
   getConnectionRule,
@@ -211,27 +210,6 @@ export const connections = computed(() => {
     default:
       return displayedClosed.value.concat(displayedActive.value)
   }
-})
-
-// 各代理组/节点的实时速率聚合:每拍一次 O(连接数×链长) 构建,消费方 O(1) 查表 ——
-// 替代每个组头各自每秒全量过滤 activeConnections(几十组 × 每秒几十万次数组操作)。
-export const chainTrafficMap = computed(() => {
-  const map = new Map<string, { download: number; upload: number }>()
-
-  for (const conn of activeConnections.value) {
-    for (const name of getConnectionChains(conn)) {
-      let entry = map.get(name)
-
-      if (!entry) {
-        entry = { download: 0, upload: 0 }
-        map.set(name, entry)
-      }
-      entry.download += conn.downloadSpeed
-      entry.upload += conn.uploadSpeed
-    }
-  }
-
-  return map
 })
 
 // 与列表同源(冻结时用冻结的那份):否则暂停期间新关闭的连接会让画面上某一行
