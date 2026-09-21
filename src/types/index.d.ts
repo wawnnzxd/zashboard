@@ -30,6 +30,7 @@ export type Config = {
   ipv6: boolean
   tun: {
     enable: boolean
+    stack?: string
   }
 }
 

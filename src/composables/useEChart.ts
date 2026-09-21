@@ -4,22 +4,14 @@ import { isMiddleScreen } from '@/helper/utils'
 import { emoji, font } from '@/store/settings'
 import { useElementSize } from '@vueuse/core'
 import { BarChart, LineChart, SankeyChart } from 'echarts/charts'
-import { GridComponent, LegendComponent, TooltipComponent } from 'echarts/components'
+import { GridComponent, TooltipComponent } from 'echarts/components'
 import * as echarts from 'echarts/core'
 import { CanvasRenderer } from 'echarts/renderers'
 import { debounce } from 'lodash-es'
 import type { ComputedRef, Ref } from 'vue'
 import { computed, nextTick, onMounted, onUnmounted, reactive, ref, shallowRef, watch } from 'vue'
 
-echarts.use([
-  BarChart,
-  LineChart,
-  SankeyChart,
-  GridComponent,
-  LegendComponent,
-  TooltipComponent,
-  CanvasRenderer,
-])
+echarts.use([BarChart, LineChart, SankeyChart, GridComponent, TooltipComponent, CanvasRenderer])
 
 export type EChart = echarts.ECharts
 export type EChartOption = echarts.EChartsCoreOption

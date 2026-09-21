@@ -66,7 +66,7 @@ const ru: LANG_MESSAGE = {
   activeConnections: 'Активные',
   closedConnections: 'Закрытые',
   allConnections: 'Все',
-  logLevel: 'Уровень журнала',
+  logLevel: 'Уровень',
   logType: 'Тип журнала',
 
   // Connections, proxies, and rules pages
@@ -111,6 +111,7 @@ const ru: LANG_MESSAGE = {
   ruleCount: 'Количество правил',
   hitCount: 'Совпадения',
   missCount: 'Промахи',
+  hitMissCount: 'Совпадения / Промахи',
   behavior: 'Поведение',
   vehicleType: 'Тип источника',
   customTableColumns: 'Пользовательские столбцы таблицы',
@@ -145,6 +146,7 @@ const ru: LANG_MESSAGE = {
   automaticDisconnection: 'Автоматическое отключение',
   backend: 'Бэкенд',
   tunMode: 'Режим Tun',
+  tunStack: 'Стек Tun',
   upgradeCore: 'Обновить ядро до новой версии',
   upgradeCoreConfirm:
     'Обновить ядро сейчас? Ядро будет перезапущено, работа прокси ненадолго прервётся.',
@@ -274,6 +276,8 @@ const ru: LANG_MESSAGE = {
   independentLatencyTestTip:
     'Включение независимого тестирования задержки попытается использовать URL-адреса, указанные в конфигурационном файле, вместо настроек URL-адресов в панели управления во время теста задержки. Задержка будет отображаться отдельно на основе URL-адресов, установленных в группах политик.',
   search: 'Поиск',
+  searchVisibleColumns: 'Поиск по отображаемым столбцам',
+  searchHiddenColumns: 'Поиск и по скрытым столбцам',
   searchProxyGroup: 'Поиск групп прокси',
   searchProxyNode: 'Поиск узлов прокси',
   proxySearchModeGlobal: 'Поиск узлов',

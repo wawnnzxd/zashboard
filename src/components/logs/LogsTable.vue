@@ -5,6 +5,7 @@
     :columns="columns"
     sorting-key="config/logs-table-sorting"
     :estimate-size="36"
+    table-class="table-fixed min-w-2xl"
   />
 </template>
 
@@ -42,7 +43,7 @@ const columns: ColumnDef<LogWithSeq>[] = [
     sortingFn: (prev, next) => prev.original.seq - next.original.seq,
     cell: ({ row }) =>
       h('span', { class: 'text-base-content/50 tabular-nums' }, row.original.seq.toString()),
-    meta: { cellClass: 'w-12' },
+    meta: { headerClass: 'w-16' },
   },
   {
     header: () => t('time'),
@@ -54,7 +55,7 @@ const columns: ColumnDef<LogWithSeq>[] = [
         { class: 'tabular-nums' },
         h(HighlightText, { text: row.original.time, filter: logFilter.value }),
       ),
-    meta: { cellClass: 'w-40' },
+    meta: { headerClass: 'w-24' },
   },
   {
     header: () => t('logLevel'),
@@ -66,7 +67,7 @@ const columns: ColumnDef<LogWithSeq>[] = [
         { class: `text-xs tracking-wide uppercase ${colorMapForType[row.original.type] ?? ''}` },
         h(HighlightText, { text: row.original.type, filter: logFilter.value }),
       ),
-    meta: { cellClass: 'w-24' },
+    meta: { headerClass: 'w-24' },
   },
   {
     header: () => t('content'),
@@ -75,7 +76,7 @@ const columns: ColumnDef<LogWithSeq>[] = [
     accessorFn: (log) => log.payload,
     cell: ({ row }) =>
       h(HighlightText, { text: row.original.payload, filter: logFilter.value, ansi: true }),
-    // 内容列不设上限,让长日志把表格撑宽后横向滚动,而不是被截断在半路
+    // 前三列在表头定死宽度,内容列不给宽度,table-fixed 会把剩下的横向空间全给它
     meta: { cellClass: 'max-w-none!' },
   },
 ]

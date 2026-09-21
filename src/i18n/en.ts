@@ -109,6 +109,7 @@ const en = {
   ruleCount: 'Rule count',
   hitCount: 'Hits',
   missCount: 'Misses',
+  hitMissCount: 'Hits / Misses',
   behavior: 'Behavior',
   vehicleType: 'Vehicle type',
   customTableColumns: 'Custom table columns',
@@ -143,6 +144,7 @@ const en = {
   automaticDisconnection: 'Auto disconnect on node switch',
   backend: 'Backend',
   tunMode: 'TUN mode',
+  tunStack: 'TUN stack',
   upgradeCore: 'Upgrade core',
   upgradeCoreConfirm:
     'Upgrade the core now? The core will restart and the proxy service will be briefly interrupted.',
@@ -271,6 +273,8 @@ const en = {
   independentLatencyTestTip:
     "When enabled, the latency test will use URLs specified in the configuration file instead of Desire's URL settings. Latency will be displayed independently based on the URLs set in policy groups.",
   search: 'Search',
+  searchVisibleColumns: 'Search displayed columns',
+  searchHiddenColumns: 'Search hidden columns too',
   searchProxyGroup: 'Search proxy groups',
   searchProxyNode: 'Search proxy nodes',
   proxySearchModeGlobal: 'Node search',
