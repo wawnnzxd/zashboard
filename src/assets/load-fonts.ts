@@ -28,7 +28,6 @@ export const loadFonts = () => {
   } else if (__FONT__ === 'firasans') {
     import('@fontsource/fira-sans/index.css')
   } else if (__FONT__ === 'none') {
-    // System UI fonts only; nothing bundled.
   } else {
     // 'all' (default): every font is bundled, but only the one in effect is loaded.
     // 原先四份 CSS 一起拉,三份未选家族约 320KB 明文、约 270 条无用 @font-face,

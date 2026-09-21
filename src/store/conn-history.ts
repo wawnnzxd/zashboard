@@ -1,0 +1,541 @@
+import { closedBatch } from '@/assembly/connections'
+import { useStorage } from '@/composables/use-storage'
+import {
+  getConnectionChains,
+  getConnectionDownload,
+  getConnectionHostname,
+  getConnectionSourceIP,
+  getConnectionUpload,
+  getProcessFromConnection,
+} from '@/helper'
+import {
+  clearConnectionHistoryFromIndexedDB,
+  ConnectionHistoryType,
+  getConnectionHistoryFromIndexedDB,
+  saveConnectionHistoryToIndexedDB,
+  type ConnectionHistoryData,
+} from '@/helper/indexeddb'
+import type { Connection } from '@/types'
+import ipaddr from 'ipaddr.js'
+import { shallowRef, watch } from 'vue'
+import { activeBackend } from './setup'
+
+const uuid = () => activeBackend.value?.uuid || ''
+const allHistoryTypes: ConnectionHistoryType[] = [
+  ConnectionHistoryType.SourceIP,
+  ConnectionHistoryType.Destination,
+  ConnectionHistoryType.Process,
+  ConnectionHistoryType.Outbound,
+  ConnectionHistoryType.ProxyGroup,
+]
+
+type AggregationMaps = Record<ConnectionHistoryType, Map<string, ConnectionHistoryData>>
+
+const createAggregationMaps = (): AggregationMaps => ({
+  [ConnectionHistoryType.SourceIP]: new Map<string, ConnectionHistoryData>(),
+  [ConnectionHistoryType.Destination]: new Map<string, ConnectionHistoryData>(),
+  [ConnectionHistoryType.Process]: new Map<string, ConnectionHistoryData>(),
+  [ConnectionHistoryType.Outbound]: new Map<string, ConnectionHistoryData>(),
+  [ConnectionHistoryType.ProxyGroup]: new Map<string, ConnectionHistoryData>(),
+})
+
+let aggMaps = createAggregationMaps()
+
+const emptyView = (): Record<ConnectionHistoryType, ConnectionHistoryData[]> => ({
+  [ConnectionHistoryType.SourceIP]: [],
+  [ConnectionHistoryType.Destination]: [],
+  [ConnectionHistoryType.Process]: [],
+  [ConnectionHistoryType.Outbound]: [],
+  [ConnectionHistoryType.ProxyGroup]: [],
+})
+
+export const aggregatedDataMap = shallowRef(emptyView())
+
+const VIEW_REFRESH_MS = 5_000
+const FLUSH_EVERY_TICKS = 6
+const TRIM_THRESHOLD = 2000
+const TRIM_KEEP = 1500
+// pending 只在 init 的加载窗口里有消费者。IDB 冷启动慢(大历史)时同样会积压,不只是
+// 持久层坏掉才会 —— 所以上限是无条件的。历史统计允许有损,标签页被撑爆不允许。
+const PENDING_LIMIT = 5000
+
+let ready = false
+// 持久层整体不可用(库打不开 / 配额耗尽)后,继续每 30s 克隆一遍全量快照再去撞墙
+// 是纯浪费,还会刷满控制台。置位后落盘早退,内存态与界面照常工作;
+// 用户手动清空历史成功即视为库又能写,自动复位重试。
+let persistenceBroken = false
+let sessionUuid = ''
+let sessionGeneration = 0
+let initEpoch = 0
+let lastClearEpoch = 0
+let dirty = false
+const dirtyTypes = new Set<ConnectionHistoryType>()
+
+interface InitContext {
+  epoch: number
+  uuid: string
+  pending: Connection[]
+}
+
+let currentContext: InitContext | undefined
+let persistenceQueue: Promise<void> = Promise.resolve()
+
+const enqueuePersistence = <T>(operation: () => Promise<T>) => {
+  const result = persistenceQueue.then(operation)
+
+  persistenceQueue = result.then(
+    () => undefined,
+    () => undefined,
+  )
+  return result
+}
+
+const markAllTypesDirty = () => {
+  dirtyTypes.clear()
+  for (const type of allHistoryTypes) {
+    dirtyTypes.add(type)
+  }
+}
+
+const refreshView = () => {
+  if (!dirtyTypes.size) {
+    return
+  }
+  const next = { ...aggregatedDataMap.value }
+
+  for (const type of dirtyTypes) {
+    next[type] = Array.from(aggMaps[type].values())
+  }
+  dirtyTypes.clear()
+  aggregatedDataMap.value = next
+}
+
+const trimMap = (maps: AggregationMaps, type: ConnectionHistoryType) => {
+  const map = maps[type]
+
+  if (map.size <= TRIM_THRESHOLD) {
+    return false
+  }
+  const kept = Array.from(map.values())
+    .sort((a, b) => b.download - a.download)
+    .slice(0, TRIM_KEEP)
+
+  map.clear()
+  for (const item of kept) {
+    map.set(item.key, item)
+  }
+  return true
+}
+
+const snapshotMaps = (
+  maps: AggregationMaps,
+): Record<ConnectionHistoryType, ConnectionHistoryData[]> =>
+  Object.fromEntries(
+    allHistoryTypes.map((type) => [type, Array.from(maps[type].values(), (item) => ({ ...item }))]),
+  ) as Record<ConnectionHistoryType, ConnectionHistoryData[]>
+
+// 返回落库成功的类型数。helper/indexeddb 的写不抛,失败即返回 false,所以这里
+// 不需要 try/catch;区分「部分失败」和「一条都没写进去」是给调用方判断
+// 「偶发抖动值得重试」还是「持久层整体没了」用的。
+const saveSnapshot = async (
+  targetUuid: string,
+  snapshot: Record<ConnectionHistoryType, ConnectionHistoryData[]>,
+) => {
+  let saved = 0
+
+  for (const type of allHistoryTypes) {
+    if (await saveConnectionHistoryToIndexedDB(targetUuid, type, snapshot[type])) {
+      saved++
+    }
+  }
+  return saved
+}
+
+const flushCurrentSession = () => {
+  if (!sessionUuid || !dirty) {
+    return Promise.resolve()
+  }
+
+  // 修剪是内存上限,不属于落盘:持久层坏掉时也必须照跑,否则 aggMaps 会无界增长。
+  for (const type of allHistoryTypes) {
+    if (trimMap(aggMaps, type)) {
+      dirtyTypes.add(type)
+    }
+  }
+
+  // 落盘停了,内存态与界面照常(dirty 保持 true,下一拍还会来修剪)。
+  if (persistenceBroken) {
+    return Promise.resolve()
+  }
+
+  // 在第一个 await 之前同时捕获 UUID 与全部数据,避免切后端时从共享 Map
+  // 读到新会话的部分状态。对象也要克隆,因为后续累加会原地修改它们。
+  const targetUuid = sessionUuid
+  const targetGeneration = sessionGeneration
+  const snapshot = snapshotMaps(aggMaps)
+
+  dirty = false
+  return enqueuePersistence(async () => {
+    const saved = await saveSnapshot(targetUuid, snapshot)
+
+    if (saved === allHistoryTypes.length) {
+      return
+    }
+    // 一条都没写进去 = 系统性失败(库打不开 / 配额满),重试只会每 30s 再来一遍;
+    // 部分成功才是值得重试的偶发抖动。
+    if (saved === 0) {
+      persistenceBroken = true
+      return
+    }
+    if (sessionUuid === targetUuid && sessionGeneration === targetGeneration) {
+      dirty = true
+    }
+  })
+}
+
+const accumulateInto = (maps: AggregationMaps, connections: Connection[]) => {
+  for (const type of allHistoryTypes) {
+    const map = maps[type]
+
+    for (const item of aggregateConnections(connections, type)) {
+      const existing = map.get(item.key)
+
+      if (existing) {
+        existing.download += item.download
+        existing.upload += item.upload
+        existing.count += item.count
+      } else {
+        map.set(item.key, item)
+      }
+    }
+  }
+}
+
+const accumulateCurrent = (connections: Connection[]) => {
+  accumulateInto(aggMaps, connections)
+  markAllTypesDirty()
+  dirty = true
+}
+
+const loadHistoryMaps = async (targetUuid: string) => {
+  const maps = createAggregationMaps()
+
+  for (const type of allHistoryTypes) {
+    let data = await getConnectionHistoryFromIndexedDB(targetUuid, type)
+
+    // null = 读不出来(不是「没有历史」)。此时绝不能当空表继续:本会话的空聚合
+    // 会在 30 秒后被 flush 回磁盘,把真实历史永久抹掉。整个会话转为只读降级。
+    if (data === null) {
+      throw new Error(`Failed to read connection history: ${type}`)
+    }
+
+    if (data.length > TRIM_THRESHOLD) {
+      data = data.sort((a, b) => b.download - a.download).slice(0, TRIM_KEEP)
+      await saveConnectionHistoryToIndexedDB(targetUuid, type, data)
+    }
+
+    for (const item of data) {
+      maps[type].set(item.key, item)
+    }
+  }
+  return maps
+}
+
+const resetCurrentSession = (targetUuid: string) => {
+  ready = false
+  sessionUuid = targetUuid
+  sessionGeneration++
+  aggMaps = createAggregationMaps()
+  dirty = false
+  viewTick = 0
+  markAllTypesDirty()
+  aggregatedDataMap.value = emptyView()
+}
+
+const settleStaleContext = async (context: InitContext, maps: AggregationMaps) => {
+  if (!context.pending.length || context.epoch < lastClearEpoch) {
+    return
+  }
+
+  const pending = context.pending.splice(0)
+
+  if (currentContext && currentContext !== context && currentContext.uuid === context.uuid) {
+    currentContext.pending.push(...pending)
+    return
+  }
+
+  // 落盘是这条路径存在的唯一意义(maps 随后即被丢弃),持久层已判定不可用就直接放弃。
+  if (persistenceBroken) {
+    return
+  }
+
+  accumulateInto(maps, pending)
+  const snapshot = snapshotMaps(maps)
+
+  await enqueuePersistence(() => saveSnapshot(context.uuid, snapshot).then(() => undefined))
+}
+
+let viewTick = 0
+setInterval(() => {
+  if (!ready || document.hidden) {
+    return
+  }
+  refreshView()
+  if (++viewTick >= FLUSH_EVERY_TICKS) {
+    viewTick = 0
+    flushCurrentSession()
+  }
+}, VIEW_REFRESH_MS)
+
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden && ready) {
+    flushCurrentSession()
+  }
+})
+window.addEventListener('pagehide', () => {
+  if (ready) {
+    flushCurrentSession()
+  }
+})
+
+export const initAggregatedDataMap = async () => {
+  flushCurrentSession()
+
+  const context: InitContext = {
+    epoch: ++initEpoch,
+    uuid: uuid(),
+    pending: [],
+  }
+
+  currentContext = context
+  resetCurrentSession(context.uuid)
+
+  let loadedMaps: AggregationMaps
+
+  try {
+    loadedMaps = await enqueuePersistence(() => loadHistoryMaps(context.uuid))
+  } catch (error) {
+    // 加载失败必须降级成「纯内存会话」,不能停在半初始化态:ready 永远为 false 的话,
+    // 之后每条关闭的连接都会被推进 pending 且再无消费者,概览的历史卡也永久空白。
+    // 同时置位 persistenceBroken —— 读不出来却照常写,会拿本会话的空表覆盖掉磁盘上的历史。
+    console.error('Failed to load connection history:', error)
+    loadedMaps = createAggregationMaps()
+    persistenceBroken = true
+  }
+
+  if (context.epoch !== initEpoch) {
+    await settleStaleContext(context, loadedMaps)
+    return
+  }
+
+  aggMaps = loadedMaps
+  ready = true
+  if (context.pending.length) {
+    accumulateCurrent(context.pending.splice(0))
+  }
+  if (currentContext === context) {
+    currentContext = undefined
+  }
+  markAllTypesDirty()
+  refreshView()
+}
+
+export const clearConnectionHistory = async () => {
+  const context: InitContext = {
+    epoch: ++initEpoch,
+    uuid: uuid(),
+    pending: [],
+  }
+
+  lastClearEpoch = context.epoch
+  currentContext = context
+  resetCurrentSession(context.uuid)
+
+  // 清理与所有已排队的落盘/加载串行:先前的写入最多先完成,随后会被这次 clear
+  // 统一删除,不会在 clear 之后又把旧快照写回。
+  const cleared = await enqueuePersistence(() => clearConnectionHistoryFromIndexedDB())
+
+  // 清空能成功,说明库本身可写(之前多半只是配额满),放开落盘重试。
+  if (cleared) {
+    persistenceBroken = false
+  }
+
+  if (context.epoch !== initEpoch) {
+    await settleStaleContext(context, createAggregationMaps())
+    return
+  }
+
+  ready = true
+  if (context.pending.length) {
+    accumulateCurrent(context.pending.splice(0))
+  }
+  if (currentContext === context) {
+    currentContext = undefined
+  }
+  refreshView()
+}
+
+export const aggregateConnections = (
+  connections: Connection[],
+  type: ConnectionHistoryType,
+): ConnectionHistoryData[] => {
+  const map = new Map<string, ConnectionHistoryData>()
+
+  connections.forEach((connection) => {
+    let key: string = ''
+
+    if (type === ConnectionHistoryType.SourceIP) {
+      key = getConnectionSourceIP(connection)
+    } else if (type === ConnectionHistoryType.Destination) {
+      const hostkey = getConnectionHostname(connection)
+      if (ipaddr.IPv4.isValid(hostkey) || ipaddr.IPv6.isValid(hostkey)) {
+        key = hostkey
+      } else {
+        key = hostkey.split('.').slice(-2).join('.')
+      }
+    } else if (type === ConnectionHistoryType.Process) {
+      key = getProcessFromConnection(connection)
+    } else if (type === ConnectionHistoryType.Outbound) {
+      key = getConnectionChains(connection)[0] || '-'
+    } else if (type === ConnectionHistoryType.ProxyGroup) {
+      const chains = getConnectionChains(connection)
+      key = chains[chains.length - 1] || '-'
+    }
+
+    if (map.has(key)) {
+      const existing = map.get(key)!
+      existing.download += getConnectionDownload(connection)
+      existing.upload += getConnectionUpload(connection)
+      existing.count += 1
+    } else {
+      map.set(key, {
+        key,
+        download: getConnectionDownload(connection),
+        upload: getConnectionUpload(connection),
+        count: 1,
+      })
+    }
+  })
+
+  return Array.from(map.values())
+}
+
+export const mergeAggregatedData = (
+  historical: ConnectionHistoryData[],
+  newData: ConnectionHistoryData[],
+): ConnectionHistoryData[] => {
+  const map = new Map<string, ConnectionHistoryData>()
+
+  for (const item of historical) {
+    map.set(item.key, item)
+  }
+
+  for (const item of newData) {
+    const existing = map.get(item.key)
+
+    if (existing) {
+      map.set(item.key, {
+        key: existing.key,
+        download: existing.download + item.download,
+        upload: existing.upload + item.upload,
+        count: existing.count + item.count,
+      })
+    } else {
+      map.set(item.key, { ...item })
+    }
+  }
+
+  return Array.from(map.values())
+}
+
+export const saveConnectionHistory = (newClosedConnections: Connection[]) => {
+  if (newClosedConnections.length === 0) {
+    return
+  }
+
+  const targetUuid = uuid()
+
+  if (!ready || targetUuid !== sessionUuid) {
+    // init 加载期间到达的关闭连接先缓冲,加载完成后统一并入,不丢数据;
+    // 超过上限就停止缓冲(见 PENDING_LIMIT)
+    if (currentContext?.uuid === targetUuid && currentContext.pending.length < PENDING_LIMIT) {
+      currentContext.pending.push(...newClosedConnections)
+    }
+    return
+  }
+
+  accumulateCurrent(newClosedConnections)
+}
+
+// ---------------------------------------------------------------------------
+// 保留期策略:这份历史自己的事,不该由某张卡片是否被渲染来决定。
+//
+// 原实现挂在 ConnectionHistory.vue 的 onMounted 上;后来挪到该 SFC 的模块作用域,
+// 但概览卡片是 defineAsyncComponent 懒加载的 —— 用户在卡片设置里隐藏它,那个模块
+// 根本不会被求值,于是设置里显示着「每月清理」,实际永不触发,只剩按下载量裁剪兜底。
+// 放在这里则跟随连接流一起加载,与卡片是否可见无关。
+// ---------------------------------------------------------------------------
+
+export enum AutoCleanupInterval {
+  Never = 'never',
+  Week = 'week',
+  Month = 'month',
+  Quarter = 'quarter',
+}
+
+export const autoCleanupInterval = useStorage<AutoCleanupInterval>(
+  'config/connection-history-auto-cleanup-interval',
+  AutoCleanupInterval.Month,
+)
+
+// 起始时间刻意留在 cache/(不随设置同步):它描述的是本机 IndexedDB 里这份历史从何时开始
+// 攒的,换台设备本来就是空表、从零计时才对;跟着设置同步过去反而会拿别人的时钟裁本机数据。
+// 与其他纯偏好不同,这个时间戳必须首次访问就落盘(useStorage 现在默认 writeDefaults:false):
+// 不写盘的话每次刷新都读到「此刻」,自动清理的到期判断永远不成立。
+export const historyStartTime = useStorage<number>(
+  'cache/connection-history-stats-start-time',
+  Date.now(),
+  undefined,
+  { writeDefaults: true },
+)
+
+const CLEANUP_INTERVAL_MS: Record<AutoCleanupInterval, number> = {
+  [AutoCleanupInterval.Never]: 0,
+  [AutoCleanupInterval.Week]: 7 * 24 * 60 * 60 * 1000,
+  [AutoCleanupInterval.Month]: 30 * 24 * 60 * 60 * 1000,
+  [AutoCleanupInterval.Quarter]: 90 * 24 * 60 * 60 * 1000,
+}
+
+/** 到期即清空。只读两个 localStorage 值,没到期不碰 IndexedDB,冷启动零额外开销。 */
+export const ensureHistoryRetention = async () => {
+  const interval = CLEANUP_INTERVAL_MS[autoCleanupInterval.value] ?? 0
+
+  if (!interval) {
+    return
+  }
+  if (Date.now() - historyStartTime.value < interval) {
+    return
+  }
+
+  try {
+    await clearConnectionHistory()
+    historyStartTime.value = Date.now()
+  } catch (error) {
+    console.error('Failed to perform auto cleanup:', error)
+  }
+}
+
+// 模块求值即检查一次。此时还没有活跃后端,clearConnectionHistoryFromIndexedDB 清的是
+// 整个 store(「清空历史」本就是全局语义),随后 initAggregatedDataMap 会以空表正常起步;
+// 两者都经 enqueuePersistence 串行,不会互相踩。
+void ensureHistoryRetention()
+
+watch(
+  activeBackend,
+  (backend) => {
+    if (backend) initAggregatedDataMap()
+  },
+  { immediate: true },
+)
+
+watch(closedBatch, (batch) => saveConnectionHistory(batch))

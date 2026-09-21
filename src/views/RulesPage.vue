@@ -67,14 +67,15 @@
 </template>
 
 <script setup lang="ts">
+import { renderRules, renderRulesProvider, rulesTabShow } from '@/store/rules'
 import VirtualScroller from '@/components/common/VirtualScroller.vue'
 import RulesCtrl from '@/components/controls/RulesCtrl'
 import RuleCard from '@/components/rules/RuleCard.vue'
 import RuleProvider from '@/components/rules/RuleProvider.vue'
 import RulesTable from '@/components/rules/RulesTable.vue'
-import { usePaddingForViews } from '@/composables/paddingViews'
+import { usePaddingForViews } from '@/composables/use-padding-for-views'
 import { LIST_DISPLAY_STYLE, RULE_TAB_TYPE } from '@/constant'
-import { fetchRules, renderRules, renderRulesProvider, rules, rulesTabShow } from '@/assembly/rules'
+import { fetchRules, rules } from '@/assembly/rules'
 import { ruleDisplayStyle } from '@/store/settings'
 import type { Rule } from '@/types'
 import { computed, provide, ref } from 'vue'

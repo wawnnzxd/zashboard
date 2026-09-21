@@ -5,7 +5,7 @@
 // (连接页的国家/ASN 查询),地球仪 Worker 用的是这里硬编码的城市库地址,两者互不相干。
 // 用户改了 GeoIP 库地址后,连接页换库、地球仪不换,两处显示的国家可能不一致且无法解释。
 // 打通需要把库地址随 'init' / 'download' 请求传进 Worker(GeoWorkerRequest 加字段)、
-// 由 geoWorkerHost 从 settings 读取并在地址变化时让 IndexedDB 缓存失效 —— 那是城市库,
+// 由 EarthGlobeCard 从 settings 读取并在地址变化时让 IndexedDB 缓存失效 —— 那是城市库,
 // 与现有两个设置项(国家库/ASN 库)语义不同,应新增独立设置项而非复用。
 export const DBIP_CITY_URL = 'https://cdn.jsdelivr.net/npm/dbip-city-lite/dbip-city-lite.mmdb.gz'
 export const DBIP_COMPRESSED_BYTES = 61_700_000
@@ -21,8 +21,6 @@ export interface EarthLocation {
   country: string
 }
 
-// A point in geographic space, kept projection-agnostic so the same sample can
-// be placed on the sphere or on the flat map. `altitude` is in sphere radii.
 export interface EarthSample {
   latitude: number
   longitude: number
@@ -81,5 +79,3 @@ export type GeoWorkerResponse =
       recoveredCorruptCache?: boolean
     }
   | { type: 'lookup'; id: number; locations: Record<string, EarthLocation | null> }
-  // 前台/后台下载的起止(宿主据此在下载期间不回收 Worker)
-  | { type: 'activity'; downloading: boolean }

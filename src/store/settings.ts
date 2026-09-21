@@ -1,4 +1,5 @@
-import { DEFAULT_SETTINGS_MENU_ORDER } from '@/config/settingsItems'
+import { useStorage } from '@/composables/use-storage'
+import { DEFAULT_SETTINGS_MENU_ORDER } from '@/config/settings-items'
 import {
   ALL_THEME,
   CONNECTION_DISPLAY_STYLE,
@@ -26,7 +27,6 @@ import {
   TEST_URL,
   type THEME,
 } from '@/constant'
-import { useStorage } from '@/helper/storage'
 import { getMinCardWidth, isMiddleScreen, isPreferredDark } from '@/helper/utils'
 import type { SourceIPLabel } from '@/types'
 import { computed } from 'vue'
@@ -254,7 +254,6 @@ export const autoDisconnectIdleUDP = useStorage('config/auto-disconnect-idle-udp
 export const autoDisconnectIdleUDPTime = useStorage('config/auto-disconnect-idle-udp-time', 300)
 export const keyboardShortcuts = useStorage<Record<string, string>>('config/keyboard-shortcuts', {})
 
-// overview
 export const splitOverviewPage = useStorage('config/split-overview-page', false)
 export const autoIPCheck = useStorage('config/auto-ip-check', true)
 export const ipCheckPrimaryAPI = useStorage<IP_INFO_API>(
@@ -272,7 +271,7 @@ export const showStatisticsWhenSidebarCollapsed = useStorage(
 )
 export const numberOfChartsInSidebar = useStorage<1 | 2 | 3>(
   'config/number-of-charts-in-sidebar',
-  2,
+  1,
 )
 const defaultOverviewCardOrder: { card: OVERVIEW_CARD; visible: boolean }[] = [
   {
@@ -329,7 +328,6 @@ export const topologyApplyConnectionFilter = useStorage(
   true,
 )
 
-// proxies
 export const collapseGroupMap = useStorage<Record<string, boolean>>('cache/collapse-group-map', {})
 export const proxyGroupFilterMap = useStorage<Record<string, string>>(
   'cache/proxy-group-filter-map',
@@ -403,7 +401,6 @@ export const groupTestUrls = useStorage<
   }[]
 >('config/group-test-urls', [])
 
-// connections
 export const connectionDisplayStyle = useStorage<CONNECTION_DISPLAY_STYLE>(
   'config/connection-display-style',
   CONNECTION_DISPLAY_STYLE.AUTO,
@@ -449,7 +446,6 @@ export const connectionCardLines = useStorage<CONNECTIONS_TABLE_ACCESSOR_KEY[][]
 export const sourceIPLabelList = useStorage<SourceIPLabel[]>('config/source-ip-label-list', [])
 export const resolveClientHostname = useStorage('config/resolve-client-hostname', false)
 
-// rules
 export const displayNowNodeInRule = useStorage('config/display-now-node-in-rule', true)
 export const displayLatencyInRule = useStorage('config/display-latency-in-rule', true)
 export const disconnectOnRuleDisable = useStorage('config/disconnect-on-rule-disable', true)
@@ -458,7 +454,6 @@ export const ruleDisplayStyle = useStorage<LIST_DISPLAY_STYLE>(
   LIST_DISPLAY_STYLE.CARD,
 )
 
-// logs
 export const logRetentionLimit = useStorage<number>('config/log-retention-limit', 1000)
 export const logDisplayStyle = useStorage<LIST_DISPLAY_STYLE>(
   'config/log-display-style',
@@ -466,9 +461,6 @@ export const logDisplayStyle = useStorage<LIST_DISPLAY_STYLE>(
 )
 export const logSearchHistory = useStorage<string[]>('cache/log-search-history', [])
 
-// settings visibility
-// 使用扁平结构，key 格式为 "大设置项.小设置项" 或 "大设置项"（仅大设置项）
-// 默认所有项都可见，只有隐藏的项才会记录在此对象中
 export const hiddenSettingsItems = useStorage<Record<string, boolean>>(
   'config/hidden-settings-items',
   {},

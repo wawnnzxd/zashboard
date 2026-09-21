@@ -1,16 +1,17 @@
 import {
-  blockConnectionByIdAPI,
-  disconnectByIdAPI,
+  blockConnectionById,
+  disconnectById,
   getConnectionDisplayValue,
 } from '@/assembly/connections'
-import { useBounceOnVisible } from '@/composables/bouncein'
-import { useConnections } from '@/composables/connections'
+import { useBounceOnVisible } from '@/composables/use-bounce-on-visible'
+import { useConnections } from '@/composables/use-connections'
 import {
   CONNECTION_TAB_TYPE,
   CONNECTIONS_TABLE_ACCESSOR_KEY,
   PROXY_CHAIN_DIRECTION,
 } from '@/constant'
 import { getConnectionChains, getConnectionSmartBlock } from '@/helper'
+import { notifyRequestError } from '@/helper/request-error'
 import { connectionFilter, connectionTabShow, isClosedConnection } from '@/store/connections'
 import { connectionCardLines, proxyChainDirection, showFullProxyChain } from '@/store/settings'
 import type { Connection } from '@/types'
@@ -169,7 +170,7 @@ const cardRenderers: Record<
         class="btn btn-circle btn-xs"
         onClick={(e) => {
           e.stopPropagation()
-          disconnectByIdAPI(ctx.conn.id)
+          disconnectById(ctx.conn.id).catch(notifyRequestError)
         }}
       >
         <XMarkIcon class="h-4 w-4" />
@@ -182,7 +183,7 @@ const cardRenderers: Record<
           class="btn btn-circle btn-xs"
           onClick={(e) => {
             e.stopPropagation()
-            blockConnectionByIdAPI(ctx.conn.id)
+            blockConnectionById(ctx.conn.id).catch(notifyRequestError)
           }}
         >
           <NoSymbolIcon class="h-4 w-4" />

@@ -1,7 +1,6 @@
 import type { LANG_MESSAGE } from './en'
 
 const ru: LANG_MESSAGE = {
-  // Navigation
   setup: 'Настройка',
   overview: 'Обзор',
   proxies: 'Прокси',
@@ -9,7 +8,6 @@ const ru: LANG_MESSAGE = {
   connections: 'Подключения',
   logs: 'Журнал',
 
-  // Common states and labels
   default: 'По умолчанию',
   skip: 'Пропустить',
   online: 'В сети',
@@ -22,7 +20,6 @@ const ru: LANG_MESSAGE = {
   connected: 'Подключено',
   copy: 'Копировать',
 
-  // Shared labels and actions
   protocol: 'Протокол',
   host: 'Хост',
   port: 'Порт',
@@ -37,7 +34,6 @@ const ru: LANG_MESSAGE = {
   memoryUsage: 'Память',
   noData: 'Нет данных',
 
-  // Backend actions and feedback
   flushFakeIP: 'Очистить Fake IP',
   flushDNSCache: 'Очистить DNS кэш',
   flushDNSCacheSuccess: 'DNS кэш успешно очищен',
@@ -69,7 +65,6 @@ const ru: LANG_MESSAGE = {
   logLevel: 'Уровень',
   logType: 'Тип журнала',
 
-  // Connections, proxies, and rules pages
   twoColumnProxyGroup: 'Группа прокси в два столбца',
   type: 'Тип',
   process: 'Процесс',
@@ -141,7 +136,6 @@ const ru: LANG_MESSAGE = {
   latencydesc: 'Задержка по убыванию',
   latencyasc: 'Задержка по возрастанию',
 
-  // Settings sections and dialogs
   language: 'Язык',
   automaticDisconnection: 'Автоматическое отключение',
   backend: 'Бэкенд',
@@ -162,7 +156,6 @@ const ru: LANG_MESSAGE = {
   dots: 'Точки',
   bar: 'Полоса',
 
-  // Settings page
   exportSettings: 'Экспорт настроек',
   importSettings: 'Импорт настроек',
   dashboardSettings: 'Настройки панели',
@@ -211,7 +204,6 @@ const ru: LANG_MESSAGE = {
   autoSwitchBackend: 'Переключиться на первый доступный бэкенд',
   noReachableBackend: 'Ни один из других бэкендов недоступен.',
 
-  // Connection diagnosis
   diagnosisUnauthorized: 'Неверный пароль: бэкенд отклонил учётные данные.',
   diagnosisTimeout: 'Бэкенд не ответил вовремя.',
   diagnosisBadEndpoint: 'адрес доступен, но это не тот API, либо путь указан неверно.',
@@ -225,7 +217,6 @@ const ru: LANG_MESSAGE = {
   diagnosisUnreachable:
     'Бэкенд недоступен; проверьте правильность адреса и порта, а также запущено ли ядро.',
 
-  // Backend settings
   ipv6Test: 'IPv6-тест',
   socksPort: 'Порт Socks',
   httpPort: 'Порт HTTP',
@@ -238,7 +229,6 @@ const ru: LANG_MESSAGE = {
   normal: 'Нормальный',
   large: 'Большой',
 
-  // Overview page
   autoIPCheckWhenStart: 'Автоматическая проверка IP при запуске',
   autoConnectionCheckWhenStart: 'Автоматическая проверка соединений при запуске',
   networkInfo: 'Информация о сети',
@@ -271,7 +261,6 @@ const ru: LANG_MESSAGE = {
   testFailedTip: '{name}\nТест задержки таймаут',
   updateFinishedTip: '{number} Обновление завершено',
 
-  // Page controls and interaction
   independentLatencyTest: 'Независимый тест задержки',
   independentLatencyTestTip:
     'Включение независимого тестирования задержки попытается использовать URL-адреса, указанные в конфигурационном файле, вместо настроек URL-адресов в панели управления во время теста задержки. Задержка будет отображаться отдельно на основе URL-адресов, установленных в группах политик.',
@@ -341,7 +330,6 @@ const ru: LANG_MESSAGE = {
   blurIntensity: 'Интенсивность размытия',
   scrollAnimationEffect: 'Эффект анимации прокрутки',
 
-  // Import, export, and upgrade
   importFromFile: 'Импортировать из файла',
   importFromUrl: 'Импортировать из URL',
   uploadSettingsSuccess: 'Настройки успешно загружены',
@@ -534,12 +522,10 @@ const ru: LANG_MESSAGE = {
   ruleMissCount: 'Промах: {count} раз',
   ruleLastMiss: 'Последний промах: {time}',
 
-  // Smart Core
   RarelyUsed: 'Редко используется',
   OccasionalUsed: 'Иногда используется',
   MostUsed: 'Часто используется',
 
-  // Папки прокси
   proxyFolderMode: 'Режим папок',
   folderModeAuto: 'Авто',
   folderModeOn: 'Вкл',

@@ -1,5 +1,4 @@
 const en = {
-  // Navigation
   setup: 'Setup',
   overview: 'Overview',
   proxies: 'Proxies',
@@ -7,7 +6,6 @@ const en = {
   connections: 'Connections',
   logs: 'Logs',
 
-  // Common states and labels
   default: 'Default',
   skip: 'Skip',
   online: 'Online',
@@ -20,7 +18,6 @@ const en = {
   connected: 'Connected',
   copy: 'Copy',
 
-  // Shared labels and actions
   protocol: 'Protocol',
   host: 'Host',
   port: 'Port',
@@ -35,7 +32,6 @@ const en = {
   memoryUsage: 'Memory usage',
   noData: 'No data',
 
-  // Backend actions and feedback
   flushFakeIP: 'Flush fake IP',
   flushDNSCache: 'Flush DNS cache',
   flushDNSCacheSuccess: 'DNS cache flushed successfully',
@@ -67,7 +63,6 @@ const en = {
   logLevel: 'Log level',
   logType: 'Log type',
 
-  // Connections, proxies, and rules pages
   twoColumnProxyGroup: 'Two-column proxy groups',
   type: 'Type',
   process: 'Process',
@@ -139,7 +134,6 @@ const en = {
   latencydesc: 'Latency descending',
   latencyasc: 'Latency ascending',
 
-  // Settings sections and dialogs
   language: 'Language',
   automaticDisconnection: 'Auto disconnect on node switch',
   backend: 'Backend',
@@ -160,7 +154,6 @@ const en = {
   dots: 'Dots',
   bar: 'Bar',
 
-  // Settings page
   exportSettings: 'Export settings',
   importSettings: 'Import settings',
   dashboardSettings: 'Dashboard settings',
@@ -209,7 +202,6 @@ const en = {
   autoSwitchBackend: 'Switch to the first reachable backend',
   noReachableBackend: 'None of the other backends are reachable.',
 
-  // Connection diagnosis
   diagnosisUnauthorized: 'Wrong password: the backend rejected the credentials.',
   diagnosisTimeout: 'The backend did not respond in time.',
   diagnosisBadEndpoint: 'the address is reachable but is not this API, or the path is wrong.',
@@ -223,7 +215,6 @@ const en = {
   diagnosisUnreachable:
     'The backend is unreachable; check that the address and port are correct and that the core is running.',
 
-  // Backend settings
   ipv6Test: 'IPv6 test',
   socksPort: 'SOCKS port',
   httpPort: 'HTTP port',
@@ -236,7 +227,6 @@ const en = {
   normal: 'Normal',
   large: 'Large',
 
-  // Overview page
   autoIPCheckWhenStart: 'Auto-check IP on startup',
   autoConnectionCheckWhenStart: 'Auto-check connections on startup',
   networkInfo: 'Network info',
@@ -268,7 +258,6 @@ const en = {
   testFailedTip: '{name}\nTest failed',
   updateFinishedTip: '{number} update(s) finished',
 
-  // Page controls and interaction
   independentLatencyTest: 'Independent latency test',
   independentLatencyTestTip:
     "When enabled, the latency test will use URLs specified in the configuration file instead of Desire's URL settings. Latency will be displayed independently based on the URLs set in policy groups.",
@@ -338,7 +327,6 @@ const en = {
   blurIntensity: 'Blur intensity',
   scrollAnimationEffect: 'Scroll animation effect',
 
-  // Import, export, and upgrade
   importFromFile: 'Import from file',
   importFromUrl: 'Import from URL',
   uploadSettingsSuccess: 'Settings uploaded successfully',
@@ -532,12 +520,10 @@ const en = {
   ruleMissCount: 'Miss: {count} times',
   ruleLastMiss: 'Last miss: {time}',
 
-  // Smart Core
   RarelyUsed: 'Rarely used',
   OccasionalUsed: 'Occasionally used',
   MostUsed: 'Most used',
 
-  // Proxy folders
   proxyFolderMode: 'Proxy folder mode',
   folderModeAuto: 'Auto',
   folderModeOn: 'On',

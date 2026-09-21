@@ -1,7 +1,6 @@
 import type { LANG_MESSAGE } from './en'
 
 const zhTW: LANG_MESSAGE = {
-  // Navigation
   setup: '配置',
   overview: '概覽',
   proxies: '代理',
@@ -9,7 +8,6 @@ const zhTW: LANG_MESSAGE = {
   connections: '連接',
   logs: '日誌',
 
-  // 通用狀態與標籤
   default: '預設',
   skip: '跳過',
   online: '線上',
@@ -22,7 +20,6 @@ const zhTW: LANG_MESSAGE = {
   connected: '已連線',
   copy: '複製',
 
-  // Shared labels and actions
   protocol: '協議',
   host: '主機',
   port: '端口',
@@ -37,7 +34,6 @@ const zhTW: LANG_MESSAGE = {
   memoryUsage: '記憶體使用',
   noData: '暫無資料',
 
-  // Backend actions and feedback
   flushFakeIP: '清空Fake IP',
   flushDNSCache: '清空DNS快取',
   flushDNSCacheSuccess: 'DNS快取清空成功',
@@ -69,7 +65,6 @@ const zhTW: LANG_MESSAGE = {
   logLevel: '日誌等級',
   logType: '日誌類型',
 
-  // Connections, proxies, and rules pages
   twoColumnProxyGroup: '雙列顯示代理組',
   type: '類型',
   process: '進程',
@@ -141,7 +136,6 @@ const zhTW: LANG_MESSAGE = {
   latencydesc: '按延遲降序',
   latencyasc: '按延遲升序',
 
-  // Settings sections and dialogs
   language: '面板語言',
   automaticDisconnection: '切換節點時自動斷開連接',
   backend: '後端',
@@ -161,7 +155,6 @@ const zhTW: LANG_MESSAGE = {
   dots: '點',
   bar: '條',
 
-  // Settings page
   exportSettings: '匯出設定',
   importSettings: '匯入設定',
   dashboardSettings: '面板設定',
@@ -208,7 +201,6 @@ const zhTW: LANG_MESSAGE = {
   autoSwitchBackend: '切換到第一個可用的後端',
   noReachableBackend: '其他後端也都連不上',
 
-  // Connection diagnosis
   diagnosisUnauthorized: '密碼不對，後端拒絕了這次請求',
   diagnosisTimeout: '後端沒有在規定時間內回應',
   diagnosisBadEndpoint: '位址能連上，但對面不是這個 API，或者路徑寫錯了',
@@ -221,7 +213,6 @@ const zhTW: LANG_MESSAGE = {
     '後端連不上 —— 也可能後端是好的，只是瀏覽器不允許 HTTPS 頁面存取 HTTP 後端；可以試著用 HTTP 開啟面板',
   diagnosisUnreachable: '後端連不上，請檢查位址與連接埠是否正確、核心是否在執行',
 
-  // Backend settings
   ipv6Test: 'IPv6 測試',
   socksPort: 'Socks 端口',
   httpPort: 'HTTP 端口',
@@ -234,7 +225,6 @@ const zhTW: LANG_MESSAGE = {
   normal: '正常',
   large: '大',
 
-  // Overview page
   autoIPCheckWhenStart: '自動檢查 IP',
   autoConnectionCheckWhenStart: '自動檢查連接',
   networkInfo: '網路資訊',
@@ -265,7 +255,6 @@ const zhTW: LANG_MESSAGE = {
   testFailedTip: '{name}\n測速超時',
   updateFinishedTip: '{number} 更新完成',
 
-  // Page controls and interaction
   independentLatencyTest: '獨立延遲測試',
   independentLatencyTestTip:
     '開啟獨立延遲測試會在測速中盡可能的使用配置檔案中的url覆蓋面板設定的url，並展示根據策略組設定的url獲取的延遲。',
@@ -330,7 +319,6 @@ const zhTW: LANG_MESSAGE = {
   blurIntensity: '毛玻璃強度',
   scrollAnimationEffect: '滾動動畫效果',
 
-  // Import, export, and upgrade
   importFromFile: '從檔案匯入',
   importFromUrl: '從 URL 匯入',
   uploadSettingsSuccess: '設定上傳成功',
@@ -518,12 +506,10 @@ const zhTW: LANG_MESSAGE = {
   ruleMissCount: '未命中: {count} 次',
   ruleLastMiss: '最後未命中: {time}',
 
-  // Smart Core
   RarelyUsed: '很少使用',
   OccasionalUsed: '偶爾使用',
   MostUsed: '經常使用',
 
-  // 代理資料夾
   proxyFolderMode: '資料夾模式',
   folderModeAuto: '自動',
   folderModeOn: '開啟',

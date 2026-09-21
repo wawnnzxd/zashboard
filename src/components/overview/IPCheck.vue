@@ -80,9 +80,9 @@ import {
   ipCheckSecondaryResult,
   MASKED_IP,
   type IPCheckResult,
-} from '@/composables/overview'
+} from '@/helper/overview'
 import { IP_INFO_API } from '@/constant'
-import { useTooltip } from '@/helper/tooltip'
+import { useTooltip } from '@/composables/use-tooltip'
 import { autoIPCheck, ipCheckPrimaryAPI, ipCheckSecondaryAPI } from '@/store/settings'
 import { BoltIcon, EyeIcon, EyeSlashIcon } from '@heroicons/vue/24/outline'
 import type { Ref } from 'vue'

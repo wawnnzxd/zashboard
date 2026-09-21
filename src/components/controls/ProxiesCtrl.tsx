@@ -3,18 +3,17 @@ import {
   allProxiesLatencyTest,
   fetchProxies,
   hasSmartGroup,
-  proxiesFilter,
-  proxiesTabShow,
   proxyGroupList,
   proxyProviederList,
-  updateProxyProviderAPI,
+  updateProxyProvider,
 } from '@/assembly/proxies'
-import { renderProxiesPageItems } from '@/composables/proxies'
-import { isProxyNodeSearchMode, toggleProxySearchMode } from '@/composables/proxySearch'
-import { useCtrlsBar } from '@/composables/useCtrlsBar'
+import { useCtrlsBar } from '@/composables/use-ctrls-bar'
 import { PROXY_SORT_TYPE, PROXY_TAB_TYPE, ROUTE_NAME, SETTINGS_MENU_KEY } from '@/constant'
+import { renderProxiesPageItems } from '@/helper/proxies'
+import { isProxyNodeSearchMode, toggleProxySearchMode } from '@/helper/proxy-search'
 import { getMinCardWidth } from '@/helper/utils'
-import { isProxyFolderModeActive } from '@/store/proxyFolders'
+import { proxiesFilter, proxiesTabShow } from '@/store/proxies'
+import { isProxyFolderModeActive } from '@/store/proxy-folders'
 import {
   automaticDisconnection,
   collapseGroupMap,
@@ -62,7 +61,7 @@ export default defineComponent({
       isUpgrading.value = true
       try {
         await Promise.all(
-          proxyProviederList.value.map((provider) => updateProxyProviderAPI(provider.name)),
+          proxyProviederList.value.map((provider) => updateProxyProvider(provider.name)),
         )
         await fetchProxies()
         isUpgrading.value = false

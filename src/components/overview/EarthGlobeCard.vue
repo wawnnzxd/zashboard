@@ -333,16 +333,16 @@
 </template>
 
 <script setup lang="ts">
-import { MASKED_IP } from '@/composables/overview'
+import { activeConnections } from '@/assembly/connections'
+import { MASKED_IP } from '@/helper/overview'
 import SegmentedControl from '@/components/common/SegmentedControl.vue'
 import SelectInput from '@/components/common/SelectInput.vue'
-import { queryDNSAPI } from '@/assembly/config'
+import { queryDNS } from '@/assembly/config'
 import { getPublicIPInfo, type IPInfo } from '@/api/geoip'
-import { getCachedPublicIPInfo } from '@/composables/overview'
+import { getCachedPublicIPInfo } from '@/helper/overview'
 import { IP_INFO_API } from '@/constant'
 import { themeColorScheme } from '@/helper/theme'
 import { prettyBytesHelper } from '@/helper/utils'
-import { activeConnections } from '@/store/connections'
 import { earthIPInfoAPI, earthProjection, earthVisualMode, language, theme } from '@/store/settings'
 import {
   ArrowPathIcon,
@@ -372,7 +372,7 @@ import {
   type GeoWorkerRequest,
   type GeoWorkerResponse,
 } from './earth/types'
-import type { EarthRenderer } from './earth/earthRenderer'
+import type { EarthRenderer } from './earth/earth-renderer'
 
 const { t } = useI18n()
 const apiOptions = Object.values(IP_INFO_API).map((value) => ({ value, label: value }))
@@ -410,8 +410,6 @@ let refreshQueued = false
 let disposed = false
 let originRequestID = 0
 
-// 初始化 Worker 与 three/webgpu 渲染器开销较大,先让路由切换动画跑完(0.35s)再在空闲时段执行,
-// 否则移动端切到概览页时主线程被占满,页面要卡一两秒才出现。
 const INIT_DELAY = 400
 const INIT_IDLE_TIMEOUT = 1000
 let initTimer: ReturnType<typeof setTimeout> | null = null
@@ -433,8 +431,6 @@ const normalizeIP = (value: string) => {
 const maskIP = (value: string) => (isValidIP(value) ? MASKED_IP : '—')
 
 const isFlatMap = computed(() => earthProjection.value === '2d')
-// The 2D map always uses the flat palette, so it shares the light chrome that
-// the flat globe style uses.
 const flatLook = computed(() => isFlatMap.value || earthVisualMode.value === 'flat')
 
 const displayedOriginIP = computed(() => {
@@ -498,7 +494,7 @@ const resolveHostname = (hostname: string) => {
       { type: 'AAAA', answerType: 28 },
     ]) {
       try {
-        const { data } = await queryDNSAPI({ name: hostname, type })
+        const data = await queryDNS({ name: hostname, type })
 
         for (const answer of data.Answer ?? []) {
           const ip = answer.type === answerType ? normalizeIP(answer.data) : null
@@ -511,9 +507,7 @@ const resolveHostname = (hostname: string) => {
           })
           return ip
         }
-      } catch {
-        // Automatic DNS lookups are best-effort; one failed family may still leave the other usable.
-      }
+      } catch {}
     }
 
     dnsCache.set(hostname, { ip: null, expiresAt: Date.now() + 30_000 })
@@ -698,7 +692,6 @@ const handleWorkerMessage = ({ data }: MessageEvent<GeoWorkerResponse>) => {
     lookupRequests.delete(data.id)
     return
   }
-  // activity(下载起止)由 geoWorkerHost 内部消费,用于下载期间不回收 Worker;卡片不关心
   if (data.type !== 'status') return
 
   databaseStatus.value = data.status
@@ -765,7 +758,7 @@ const initialize = async () => {
   await nextTick()
 
   try {
-    const { createEarthRenderer } = await import('./earth/earthRenderer')
+    const { createEarthRenderer } = await import('./earth/earth-renderer')
 
     if (!canvasRef.value || disposed) return
     const createdRenderer = await createEarthRenderer(canvasRef.value, {

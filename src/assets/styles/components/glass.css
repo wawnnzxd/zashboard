@@ -107,6 +107,18 @@
   box-shadow: inset -1px 0 0 var(--glass-border);
 }
 
+/* 底部 dock(窄屏导航):上游的 .dock 材质写在 HomePage.vue 的 <style> 里 —— 未分层、且打包
+   顺序在 main.css 之后,同特异性会反压这里。多带一层 .home-page 把特异性抬到 (0,2,0) 稳赢它;
+   与 appearance.css 的 `.custom-background :is(.dock)` 平级,由引入顺序让后者胜出(壁纸模式照旧)。
+   材质走统一令牌(tokens.css):高光在暗色主题随 light-dark() 自动收敛,不是写死的白色。 */
+.home-page .dock {
+  background-color: var(--glass-chrome);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--shadow-float), var(--glass-highlight);
+}
+
 /* 弹窗:最厚的玻璃(80% 底色保证表单可读),配最深的浮层影 */
 .modal-box {
   background-color: color-mix(in oklab, var(--color-base-100) 80%, transparent);
@@ -159,7 +171,7 @@
   .glass-chrome,
   .ctrls-bar,
   .modal-box,
-  .dock,
+  .home-page .dock,
   .app-toast {
     background-color: var(--color-base-100);
     -webkit-backdrop-filter: none;

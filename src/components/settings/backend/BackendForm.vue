@@ -1,13 +1,3 @@
-<!--
-  后端连接参数的表单字段。新增与编辑共用同一份 —— 两处字段本就该一致。
-
-  disableUpgradeCore / disableTunMode 有意不在这里出现:它们是给通过 URL 参数
-  下发后端的场景用的(见 getBackendFromUrl),由分发方决定藏掉哪些功能,
-  不是手填地址的人要操心的东西。编辑时原样带过,不清空。
-
-  这里只管字段。可达性探测留在父级:登录页要根据探测结果决定能不能自动登录,
-  探测状态藏进子组件父级就读不到了。
--->
 <template>
   <div class="flex flex-col gap-3">
     <div class="flex gap-2">

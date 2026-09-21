@@ -1,13 +1,3 @@
-/*
- * 全部动画与过渡：@keyframes、Vue <Transition> 的类、以及各处的运动曲线。
- * 静态外观不要写在这里。每个分节都要给出对应的 prefers-reduced-motion 降级。
- *
- * 已知例外：弹窗/底部抽屉的过渡（.modal-enter-* / .modal-leave-*）有意留在
- * components/common/DialogWrapper.vue 的 <style scoped> 里，不在本文件。
- */
-
-/* ---------- 入场 / 强调 ---------- */
-
 @keyframes bounceIn {
   0% {
     opacity: 0.5;
@@ -40,24 +30,6 @@
   }
 }
 
-@keyframes highlightFlash {
-  0% {
-    box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-primary) 100%, transparent);
-  }
-  50% {
-    box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-primary) 30%, transparent);
-  }
-  100% {
-    box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-primary) 0%, transparent);
-  }
-}
-
-.highlight-flash {
-  animation: highlightFlash 0.6s ease-out 2;
-}
-
-/* ---------- 侧栏菜单 / 分段 Tabs 的滑动指示器 ---------- */
-
 .nav-indicator {
   transform-origin: center;
 }
@@ -83,273 +55,55 @@
   }
 }
 
-/* ---------- 折叠卡片 ---------- */
-
-/*
- * 卡片高度、内容淡入淡出、后面行的位移共用一组 WAAPI 时长与曲线。
- * 挂在 :root 而不是 .collapse-motion 上：行的位移那条选中的是卡片的兄弟节点，
- * 拿不到卡片自己的自定义属性。
- */
-:root {
-  --collapse-motion-duration: 0.26s;
-  --collapse-motion-ease: cubic-bezier(0.34, 0.1, 0.2, 1);
-}
-
-.collapse-motion {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: max-content max-content;
-}
-
-.collapse-motion > .collapse-motion-header {
-  grid-area: 1 / 1;
-}
-
-.collapse-motion > .collapse-motion-body {
-  grid-area: 2 / 1;
-  display: grid;
-  position: relative;
-  min-height: 0;
-  overflow: hidden;
-}
-
-.collapse-motion-preview,
-.collapse-motion-content {
-  grid-area: 1 / 1;
-  align-self: start;
-  opacity: 1;
-}
-
-.collapse-motion-body-transitioning > :is(.collapse-motion-preview, .collapse-motion-content) {
-  position: absolute;
-  inset: 0 0 auto;
-}
-
-.collapse-motion-open .collapse-motion-preview,
-.collapse-motion:not(.collapse-motion-open) .collapse-motion-content {
-  pointer-events: none;
-  opacity: 0;
-}
-
-.collapse-motion-placeholder {
-  position: relative;
-}
-
-.collapse-motion-floating > .collapse-motion {
-  position: absolute;
-  inset-inline: 0;
-  top: 0;
-  z-index: 1;
-}
-
-.virtual-row-shift-row {
-  transform: translateY(var(--virtual-row-shift, 0px));
-}
-
-/* 零时长动画也会正常完成并交接，无需额外的结束事件兜底。 */
-@media (prefers-reduced-motion: reduce) {
-  :root {
-    --collapse-motion-duration: 0s;
-  }
-}
-
-/* ---------- 代理组卡片（移动端） ---------- */
-
-/*
- * 遮罩跟弹窗对齐：和 DialogWrapper 的遮罩用同一条过渡（0.25s + CSS 关键字 ease-out，
- * 即 cubic-bezier(0, 0, 0.58, 1)），压暗读起来才是同一种动作。
- *
- * 卡片生长和内容渐显不跟：那是这张卡自己的展开，要比遮罩利落，沿用原本的 0.2s +
- * Tailwind 的 ease-out —— cubic-bezier(0, 0, 0.2, 1) 前段冲得快，换成上面那条会明显拖。
- *
- * reduced-motion 下刻意不降级：一来要跟 DialogWrapper 的遮罩保持一致（那边也只降级了
- * .modal-box 的位移），二来卡片的展开/收起靠 width 的 transitionend 交接
- * （见 ProxyGroupForMobile 的 handlerTransitionEnd），过渡取消掉事件就不再触发。
- */
-:root {
-  --proxy-group-backdrop-motion: 0.25s ease-out;
-  --proxy-group-card-motion: 0.2s cubic-bezier(0, 0, 0.2, 1);
-}
-
-.proxy-group-backdrop-enter-active,
-.proxy-group-backdrop-leave-active {
-  transition: opacity var(--proxy-group-backdrop-motion);
-}
-
-.proxy-group-backdrop-enter-from,
-.proxy-group-backdrop-leave-to {
-  opacity: 0;
-}
-
-.proxy-group-card {
-  transition:
-    width var(--proxy-group-card-motion),
-    transform var(--proxy-group-card-motion),
-    max-height var(--proxy-group-card-motion);
-}
-
-.proxy-group-card-content {
-  transition: opacity var(--proxy-group-card-motion);
-}
-
-/* ---------- 代理节点网格 ---------- */
-
-/*
- * 测速后节点被重新排序时的定位提示。用 animation 而非 transition,
- * 让提示动画独立于节点本身的过渡属性。
- */
-.latency-highlight::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  pointer-events: none;
-  background-color: var(--color-info);
-  animation: latencyHighlightFade 1.5s ease-out forwards;
-}
-
-@keyframes latencyHighlightFade {
-  0% {
-    opacity: 0.2;
-  }
-  100% {
-    opacity: 0;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .latency-highlight::after {
-    animation: none;
-  }
-}
-
-/* ---------- 杂项 ---------- */
-
-.app-toast {
-  animation: appToastIn 0.22s cubic-bezier(0.32, 0.72, 0, 1) both;
-}
-
-.app-toast.is-leaving {
-  animation: appToastOut 0.16s ease-in both;
-}
-
-@keyframes appToastIn {
-  from {
-    opacity: 0;
-    transform: translateX(0.75rem) scale(0.98);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(0) scale(1);
-  }
-}
-
-@keyframes appToastOut {
-  from {
-    opacity: 1;
-    transform: translateX(0) scale(1);
-  }
-  to {
-    opacity: 0;
-    transform: translateX(0.5rem) scale(0.98);
-  }
-}
-
-@keyframes progressBar {
-  from {
-    width: 100%;
-  }
-  to {
-    width: 0%;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .app-toast,
-  .app-toast.is-leaving {
-    animation-duration: 0.01ms;
-  }
-}
-
-/* ---------- 路由切换 ---------- */
-
 :root {
   --page-transition-duration: 0.35s;
   --page-transition-ease: cubic-bezier(0.32, 0.72, 0, 1);
 }
 
-/* 顶级页面之间:iOS 风格的整屏横向滑动 */
-.slide-right-enter-active,
-.slide-right-leave-active,
-.slide-left-enter-active,
-.slide-left-leave-active {
-  transition: transform var(--page-transition-duration) var(--page-transition-ease);
-  position: absolute;
-  left: 0;
-  top: 0;
-  width: 100%;
-  height: 100%;
-  will-change: transform;
-  backface-visibility: hidden;
-}
+/* ---------- Desire:页面「凝成」 ---------- */
 
-/* slide-left: content moves left */
-.slide-left-enter-from {
-  transform: translateX(100%);
-}
-.slide-left-enter-to {
-  transform: translateX(0);
-}
-.slide-left-leave-from {
-  transform: translateX(0);
-}
-.slide-left-leave-to {
-  transform: translateX(-100%);
-}
-
-/* slide-right: content moves right */
-.slide-right-enter-from {
-  transform: translateX(-100%);
-}
-.slide-right-enter-to {
-  transform: translateX(0);
-}
-.slide-right-leave-from {
-  transform: translateX(0);
-}
-.slide-right-leave-to {
-  transform: translateX(100%);
-}
-
-/* PC route transition: subtle fade, used with mode="out-in" */
-/* 页面「凝成」而不是淡入:blur 收敛 + 轻微缩放,玻璃材质到位的感觉。
-   mode=out-in,两页永不同屏,filter 只在 0.22s 内存在,不常驻合成层 */
-.page-enter-active {
+/*
+ * 上游的页面过渡(纯淡入淡出)现在写在 HomePage.vue 的 <style> 里 —— 未分层、且打包顺序在
+ * main.css 之后,同特异性会反压这里。多带一层 .home-page 抬到 (0,2,0) 稳赢它;
+ * 壁纸模式那条 `.custom-background :is(.page-enter-active, …)` 同为 (0,2,0) 且更晚,照旧胜出。
+ *
+ * 「凝成」而不是淡入:blur 收敛 + 轻微缩放,玻璃材质到位的感觉。
+ * mode=out-in,两页永不同屏,filter 只在 0.22s 内存在,不常驻合成层。
+ */
+.home-page .page-enter-active {
   transition:
     opacity 0.22s var(--ease-out-strong),
     transform 0.22s var(--ease-out-strong),
     filter 0.22s var(--ease-out-strong);
   will-change: opacity, transform, filter;
 }
-.page-leave-active {
+.home-page .page-leave-active {
   transition:
     opacity 0.15s ease-in,
     transform 0.15s ease-in,
     filter 0.15s ease-in;
   will-change: opacity, transform, filter;
 }
-.page-enter-from {
+.home-page .page-enter-from {
   opacity: 0;
   transform: scale(0.985);
   filter: blur(6px);
 }
-.page-leave-to {
+.home-page .page-leave-to {
   opacity: 0;
   transform: scale(0.99);
   filter: blur(4px);
 }
+/* 壁纸模式下上游直接不做过渡(transition: none),起止态的缩放与模糊也得一并撤掉,
+   否则进场那一帧会带着 blur(6px) 闪一下。 */
+.custom-background .home-page :is(.page-enter-from, .page-leave-to) {
+  transform: none;
+  filter: none;
+}
 
-/* 按压反馈:按下的瞬间界面就要「应答」(pointer-down,不等 release)。
+/* ---------- Desire:按压反馈 ---------- */
+
+/* 按下的瞬间界面就要「应答」(pointer-down,不等 release)。
    整条 transition 重写是有意的:transform 用 0.16s 强 ease-out,
    颜色态沿用 0.2s —— 只写 transform 会把 daisyUI 自己的颜色过渡踩掉 */
 .btn:not(:disabled) {
@@ -369,7 +123,7 @@
 .dock button:active {
   transform: scale(0.9);
 }
-/* 侧栏导航项:上游 NavMenu 的 .nav-item 自带颜色/底色过渡(见上文「滑动指示器」段),
+/* 侧栏导航项:上游 NavMenu 的 .nav-item 自带颜色/底色过渡(见上文),
    这里整条重写是为了把 transform 并进同一个 transition 列表 —— 只写 transform 会把那两条盖掉。
    限定在 .sidebar 内:分段 Tabs 也用 .nav-item,它们不缩放。 */
 .sidebar .nav-item {
@@ -382,24 +136,14 @@
   transform: scale(0.96);
 }
 
-/* toast 入场:@starting-style 凝成(位移+缩放+淡入),退场由 notification.ts 的 WAAPI 负责 */
-.toast .alert {
-  transition:
-    opacity 0.3s var(--ease-out-strong),
-    transform 0.3s var(--ease-out-strong);
-  @starting-style {
-    opacity: 0;
-    transform: translateY(-0.5rem) scale(0.97);
-  }
-}
-
 @media (prefers-reduced-motion: reduce) {
-  .page-enter-active,
-  .page-leave-active {
+  /* 减少动态效果 ≠ 没有反馈:页面切换退化成一次短的交叉淡化 */
+  .home-page .page-enter-active,
+  .home-page .page-leave-active {
     transition: opacity 0.15s ease;
   }
-  .page-enter-from,
-  .page-leave-to {
+  .home-page .page-enter-from,
+  .home-page .page-leave-to {
     transform: none;
     filter: none;
   }
@@ -411,90 +155,5 @@
   /* 上面那条 .sidebar .nav-item 比上游的 .nav-item { transition: none } 特异性高,这里要自己关 */
   .sidebar .nav-item {
     transition: none;
-  }
-  .toast .alert {
-    transition: opacity 0.2s ease;
-    @starting-style {
-      transform: none;
-    }
-  }
-}
-
-/*
- * 壁纸模式下这个淡入淡出直接不做。opacity < 1（will-change: opacity 同理）会把这一屏变成
- * backdrop root，屏内所有 backdrop-filter 就只能采样组内画过的东西；壁纸铺在 #app-content
- * 上、在组外，于是整个过渡期间玻璃面板都是「完全没有模糊的半透明」，动画一结束组消失、
- * 模糊又整块回来——就是切页时看到的那一下突变。
- *
- * 换成位移试过了：位移确实不形成 backdrop root，但 out-in 下换屏是瞬间的，紧跟一段位移
- * 看着就是抖了一下。这里没有既能淡入又能保住模糊的写法，索性直接换屏。
- */
-.custom-background :is(.page-enter-active, .page-leave-active) {
-  transition: none;
-  will-change: auto;
-}
-.custom-background :is(.page-enter-from, .page-leave-to) {
-  opacity: 1;
-}
-
-/*
- * 设置页一级 <-> 二级。两屏共用同一个滚动容器、且二级内容必须常驻挂载(搜索索引),
- * 没法像顶级页面那样让两屏同时在场做位移,所以只给进场的那一屏做动画。
- */
-@keyframes settingsPanePush {
-  from {
-    transform: translateX(100%);
-  }
-  to {
-    transform: translateX(0);
-  }
-}
-
-@keyframes settingsPanePop {
-  from {
-    opacity: 0;
-    transform: translateX(-25%);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(0);
-  }
-}
-
-.settings-pane-push {
-  animation: settingsPanePush var(--page-transition-duration) var(--page-transition-ease);
-}
-
-.settings-pane-pop {
-  animation: settingsPanePop var(--page-transition-duration) var(--page-transition-ease);
-}
-
-/* 同上：壁纸模式下这一屏的 opacity 会掐掉屏内的 backdrop-filter，只留位移。 */
-@keyframes settingsPanePopWithoutFade {
-  from {
-    transform: translateX(-25%);
-  }
-  to {
-    transform: translateX(0);
-  }
-}
-
-.custom-background .settings-pane-pop {
-  animation-name: settingsPanePopWithoutFade;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .slide-right-enter-active,
-  .slide-right-leave-active,
-  .slide-left-enter-active,
-  .slide-left-leave-active,
-  .page-enter-active,
-  .page-leave-active {
-    transition-duration: 0.01ms;
-  }
-
-  .settings-pane-push,
-  .settings-pane-pop {
-    animation-duration: 0.01ms;
   }
 }

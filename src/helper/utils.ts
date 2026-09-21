@@ -22,7 +22,6 @@ export const prettyBytesHelper = (bytes: number, opts?: Options) => {
   )
 }
 
-// 速度每秒都在刷新,不足 1 kB 时继续按 kB 显示,避免 B/kB 单位来回切换让数值大幅跳动。
 export const prettySpeedHelper = (bytes: number, opts?: Options) => {
   const value = Number.isFinite(bytes) ? bytes : 0
   const maximumFractionDigits = opts?.maximumFractionDigits ?? 1
@@ -120,7 +119,6 @@ export const getMinCardWidth = (size: PROXY_CARD_SIZE) => {
 
 export const PROXIES_PARENT_CLASS = 'proxies-scrollable-parent'
 
-// 新格式 protocol=http/https 优先,旧格式 http / https 标记参数仍保留兼容,最后兜底当前页面协议。
 const getProtocolFromQuery = (query: URLSearchParams) => {
   const protocol = query.get('protocol')
 

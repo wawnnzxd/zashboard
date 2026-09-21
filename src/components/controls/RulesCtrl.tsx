@@ -1,14 +1,8 @@
-import {
-  fetchRules,
-  ruleProviderList,
-  rules,
-  rulesFilter,
-  rulesTabShow,
-  updateRuleProviderAPI,
-} from '@/assembly/rules'
-import { useCtrlsBar } from '@/composables/useCtrlsBar'
+import { fetchRules, ruleProviderList, rules, updateRuleProvider } from '@/assembly/rules'
+import { useCtrlsBar } from '@/composables/use-ctrls-bar'
 import { LIST_DISPLAY_STYLE, RULE_TAB_TYPE } from '@/constant'
 import { showNotification } from '@/helper/notification'
+import { rulesFilter, rulesTabShow } from '@/store/rules'
 import {
   disconnectOnRuleDisable,
   displayLatencyInRule,
@@ -43,7 +37,7 @@ export default defineComponent({
 
         await Promise.all(
           ruleProviderList.value.map((provider) =>
-            updateRuleProviderAPI(provider.name).then(() => {
+            updateRuleProvider(provider.name).then(() => {
               updateCount++
 
               const isFinished = updateCount === ruleProviderList.value.length

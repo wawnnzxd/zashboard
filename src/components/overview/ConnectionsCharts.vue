@@ -10,17 +10,16 @@
 </template>
 
 <script setup lang="ts">
-import { defineAsyncComponent } from 'vue'
+import { connectionsHistory, timeSaved } from '@/assembly/overview'
+import { formatTimeSeriesTooltipParam } from '@/components/charts/chart-tooltip'
+import type { ChartTooltipParam } from '@/components/charts/chart-types'
+import { computed, defineAsyncComponent } from 'vue'
+import { useI18n } from 'vue-i18n'
 
 // echarts 经「侧栏常驻图表」同步链进 entry(573KB raw):组件层异步化才能把它切出去
 const TimeSeriesChart = defineAsyncComponent(
   () => import('@/components/charts/TimeSeriesChart.vue'),
 )
-import { formatTimeSeriesTooltipParam } from '@/components/charts/chartTooltip'
-import type { ChartTooltipParam } from '@/components/charts/chartTypes'
-import { connectionsHistory, timeSaved } from '@/store/overview'
-import { computed } from 'vue'
-import { useI18n } from 'vue-i18n'
 
 const { t } = useI18n()
 const chartsData = computed(() => {

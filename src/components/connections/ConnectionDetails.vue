@@ -28,7 +28,6 @@
         />
       </div>
 
-      <!-- 概览:美化后的分组展示 -->
       <div
         v-if="activeTab === 'overview'"
         class="flex flex-1 flex-col gap-3 overflow-y-auto p-4"
@@ -83,7 +82,6 @@
         </template>
       </div>
 
-      <!-- 原始 JSON -->
       <div
         v-if="activeTab === 'raw'"
         class="flex-1 overflow-y-auto p-4"
@@ -112,7 +110,6 @@
         </VueJsonPretty>
       </div>
 
-      <!-- 切换代理组 -->
       <div
         v-if="proxyChainStart && activeTab === 'proxies'"
         class="flex flex-1 flex-col overflow-y-auto"
@@ -148,7 +145,7 @@ import ProxyChainPath from '@/components/common/ProxyChainPath.vue'
 import SegmentedControl, { type SegmentOption } from '@/components/common/SegmentedControl.vue'
 import ProxyGroupPanel from '@/components/proxies/ProxyGroupPanel.vue'
 import SourceIPLabels from '@/components/settings/connections/SourceIPLabels.vue'
-import { useConnections } from '@/composables/connections'
+import { useConnections } from '@/composables/use-connections'
 import { CONNECTIONS_TABLE_ACCESSOR_KEY } from '@/constant'
 import { getConnectionChains, getConnectionSourceIP, getDestinationFromConnection } from '@/helper'
 import { PROXIES_PARENT_CLASS } from '@/helper/utils'
@@ -250,7 +247,6 @@ const sections = computed(() => {
   const options = {
     mode: 'table' as const,
     proxyChainDirection: proxyChainDirection.value,
-    // 连接详情要展示完整链路，不受列表/卡片的精简开关影响
     showFullProxyChain: true,
   }
   const rowsOf = (keys: CONNECTIONS_TABLE_ACCESSOR_KEY[]) =>

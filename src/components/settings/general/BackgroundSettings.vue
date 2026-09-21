@@ -69,7 +69,7 @@
 
 <script setup lang="ts">
 import SettingItem from '@/components/settings/SettingItem.vue'
-import { GENERAL_ITEM_KEYS } from '@/config/settingsItems'
+import { GENERAL_ITEM_KEYS } from '@/config/settings-items'
 import { deleteBase64FromIndexedDB, LOCAL_IMAGE, saveBase64ToIndexedDB } from '@/helper/indexeddb'
 import { showNotification } from '@/helper/notification'
 import {
@@ -210,9 +210,7 @@ const handlerFileChange = (e: Event) => {
 
     try {
       confirmApplyThemeByBackgroundTone(await detectBackgroundTone(imageURL))
-    } catch {
-      // Keep the current theme if tone detection fails.
-    }
+    } catch {}
 
     // saveBase64ToIndexedDB 在任何 await 之前就把图写进内存缓存,所以先改 URL 也能
     // 立刻显示新图(不必为了正确性而等落库);这里 await 只为拿落库结果做失败提示。
