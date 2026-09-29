@@ -151,6 +151,7 @@ const chartSurfaceStyle = computed<CSSProperties>(() => {
   // 那一档由 useAppearanceVars 兜住,这里只管「有没有图」。
   if (backgroundImage.value) {
     style.backdropFilter = 'var(--app-glass, none)'
+    style.WebkitBackdropFilter = 'var(--app-glass, none)'
   }
 
   if (!shouldRotate.value) return style

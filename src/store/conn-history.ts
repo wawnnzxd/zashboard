@@ -21,6 +21,29 @@ import { shallowRef, watch } from 'vue'
 import { activeBackend } from './setup'
 
 const uuid = () => activeBackend.value?.uuid || ''
+
+// 目的地按「可注册域名」归并(x.com.cn 归到 x.com.cn 而不是 com.cn)要用公共后缀表 tldts,
+// 约 46KB gzip,首屏用不上 —— 单独成块,历史会话初始化时才加载。init / clear 都等它就绪才置 ready,
+// 之前关闭的连接在 pending 里排队,所以写进历史库的键从第一条起就按公共后缀算,不会前后混着两种算法。
+// 加载失败(离线且没缓存等)时退回旧算法「取末两段」。
+let getDomain: typeof import('tldts').getDomain | undefined
+let domainParserLoading: Promise<void> | undefined
+
+const loadDomainParser = () =>
+  (domainParserLoading ??= import('tldts').then(
+    (mod) => {
+      getDomain = mod.getDomain
+    },
+    (error) => {
+      console.error('Failed to load tldts:', error)
+    },
+  ))
+
+const registrableDomain = (hostname: string) =>
+  (getDomain
+    ? getDomain(hostname, { allowPrivateDomains: true })
+    : hostname.split('.').slice(-2).join('.')) || hostname
+
 const allHistoryTypes: ConnectionHistoryType[] = [
   ConnectionHistoryType.SourceIP,
   ConnectionHistoryType.Destination,
@@ -309,6 +332,7 @@ export const initAggregatedDataMap = async () => {
 
   currentContext = context
   resetCurrentSession(context.uuid)
+  loadDomainParser()
 
   let loadedMaps: AggregationMaps
 
@@ -322,6 +346,8 @@ export const initAggregatedDataMap = async () => {
     loadedMaps = createAggregationMaps()
     persistenceBroken = true
   }
+
+  await loadDomainParser()
 
   if (context.epoch !== initEpoch) {
     await settleStaleContext(context, loadedMaps)
@@ -360,6 +386,8 @@ export const clearConnectionHistory = async () => {
     persistenceBroken = false
   }
 
+  await loadDomainParser()
+
   if (context.epoch !== initEpoch) {
     await settleStaleContext(context, createAggregationMaps())
     return
@@ -391,7 +419,7 @@ export const aggregateConnections = (
       if (ipaddr.IPv4.isValid(hostkey) || ipaddr.IPv6.isValid(hostkey)) {
         key = hostkey
       } else {
-        key = hostkey.split('.').slice(-2).join('.')
+        key = registrableDomain(hostkey)
       }
     } else if (type === ConnectionHistoryType.Process) {
       key = getProcessFromConnection(connection)

@@ -219,6 +219,7 @@
 </template>
 
 <script setup lang="ts">
+import { can } from '@/assembly/backend'
 import {
   blockConnectionById,
   disconnectById,
@@ -347,7 +348,7 @@ const columnDefinitions: ColumnDef<Connection>[] = [
     enableSorting: false,
     id: CONNECTIONS_TABLE_ACCESSOR_KEY.Close,
     cell: ({ row }) => {
-      if (isClosedConnection(row.original)) {
+      if (isClosedConnection(row.original) || !can('connectionsClose')) {
         return null
       }
 
@@ -889,6 +890,7 @@ tbody tr:hover > .pinned-td {
 
 .custom-background .pinned-td {
   background-color: transparent !important;
+  -webkit-backdrop-filter: var(--app-glass, none);
   backdrop-filter: var(--app-glass, none);
 }
 </style>

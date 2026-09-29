@@ -1,4 +1,7 @@
-export type BackendType = 'clash'
+export * from './dae'
+import type { DaeConnectionRawMessage } from './dae'
+
+export type BackendType = 'clash' | 'dae'
 
 export type Backend = {
   type: BackendType
@@ -38,6 +41,7 @@ export type History = {
 }[]
 
 export type Proxy = {
+  id?: string
   name: string
   type: string
   history: History
@@ -70,6 +74,7 @@ export type SubscriptionInfo = {
 
 export type ProxyProvider = {
   subscriptionInfo?: SubscriptionInfo
+  id?: string
   name: string
   proxies: Proxy[]
   testUrl: string
@@ -144,7 +149,7 @@ export type ClashConnectionRawMessage = {
   }
 }
 
-export type ConnectionRawMessage = ClashConnectionRawMessage
+export type ConnectionRawMessage = ClashConnectionRawMessage | DaeConnectionRawMessage
 
 export type Connection = ConnectionRawMessage & {
   downloadSpeed: number

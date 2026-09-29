@@ -9,7 +9,7 @@ import dayjs from 'dayjs'
 import * as ipaddr from 'ipaddr.js'
 import pLimit from 'p-limit'
 import { ref, shallowRef, watch } from 'vue'
-import { driver, type ConnectionAccessor } from './driver'
+import { driver, type ConnectionAccessor, type ConnectionsFilter } from './driver'
 
 export type ConnectionDisplayOptions = {
   mode: 'card' | 'table'
@@ -38,7 +38,8 @@ export const connectionAccessor = (): ConnectionAccessor => driver().connections
 
 export const disconnectById = (id: string) => driver().connections.disconnect(id)
 
-export const disconnectAll = () => driver().connections.disconnectAll()
+export const disconnectAll = (filter?: ConnectionsFilter) =>
+  driver().connections.disconnectAll(filter)
 
 export const blockConnectionById = (id: string) => driver().connections.block(id)
 
@@ -144,9 +145,25 @@ export const initConnections = () => {
     // 概览页连接数折线以暂停瞬间的值画出一条假的水平直线。冻结发生在显示层。
     activeConnections.value = active
 
-    if (closed.length > 0) {
-      closedConnections.value = closedConnections.value.concat(closed).slice(-500)
-      closedBatch.value = closed
+    // dae 会在消息里直接报告已关闭的连接(payload.closed),mihomo 不报、这里恒空。
+    // 连接消息每秒一拍,别为了恒空的输入每拍都建一个最多 500 条的 ID 集合。
+    let batch = closed
+
+    if (payload.closed?.length) {
+      const known = new Set(closedConnections.value.map((connection) => connection.id))
+
+      for (const connection of closed) known.add(connection.id)
+
+      const reported = payload.closed.filter(
+        (connection) => !known.has(connection.id) && !currentMap.has(connection.id),
+      ) as Connection[]
+
+      batch = closed.concat(reported)
+    }
+
+    if (batch.length > 0) {
+      closedConnections.value = closedConnections.value.concat(batch).slice(-500)
+      closedBatch.value = batch
     }
   })
 

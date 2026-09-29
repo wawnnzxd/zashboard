@@ -1,3 +1,4 @@
+import { can } from '@/assembly/backend'
 import {
   blockConnectionById,
   disconnectById,
@@ -165,6 +166,8 @@ const cardRenderers: Record<
     </div>
   ),
   [CONNECTIONS_TABLE_ACCESSOR_KEY.Close]: (ctx) => {
+    if (!can('connectionsClose')) return <div></div>
+
     const closeButton = (
       <button
         class="btn btn-circle btn-xs"

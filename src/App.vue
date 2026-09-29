@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import './assembly/session'
 import './store/conn-history'
-import { computed, onMounted, ref, type Ref, watch } from 'vue'
+import { computed, defineAsyncComponent, onMounted, ref, type Ref, watch } from 'vue'
 import { RouterView } from 'vue-router'
 import BackendConnectionError from './components/common/BackendConnectionError.vue'
 import BackendSwitchToast from './components/common/BackendSwitchToast.vue'
@@ -11,7 +11,11 @@ import UpgradeCoreModal from './components/settings/backend/UpgradeCoreModal.vue
 import { useAppearanceVars } from './composables/use-appearance-vars'
 import { useOverscrollLock } from './composables/use-overscroll-lock'
 import { useThemeColor } from './composables/use-theme-color'
-import { showUpdateConfigModal, showUpgradeCoreModal } from '@/helper/backend-actions'
+import {
+  showDaeConfigModal,
+  showUpdateConfigModal,
+  showUpgradeCoreModal,
+} from '@/helper/backend-actions'
 import ConfirmDialogHost from './components/common/ConfirmDialogHost.vue'
 import { registerSW } from 'virtual:pwa-register'
 import { useKeyboard } from './composables/use-keyboard'
@@ -26,8 +30,14 @@ import { backgroundImage } from './helper/indexeddb'
 import { initNotification } from './helper/notification'
 import { getBackendFromUrl } from './helper/utils'
 import { emoji, font, theme } from './store/settings'
-import { backendList, setActiveBackend } from './store/setup'
+import { activeBackend, backendList, setActiveBackend } from './store/setup'
 import type { Backend } from './types'
+
+// dae 专用的配置弹窗:只有当前后端是 dae 才挂载,并单独成块 —— 本 fork 只接 mihomo,
+// 静态引入会把整套 dae 配置面板带进首屏。
+const DaeConfigModal = defineAsyncComponent(
+  () => import('./components/settings/backend/DaeConfigModal.vue'),
+)
 
 const app = ref<HTMLElement>()
 const toast = ref<HTMLElement>()
@@ -64,7 +74,7 @@ useOverscrollLock()
 watch(
   theme,
   () => {
-    document.body.setAttribute('data-theme', theme.value)
+    document.documentElement.setAttribute('data-theme', theme.value)
     setThemeColor()
   },
   {
@@ -150,12 +160,20 @@ useKeyboard()
     ]"
     :style="[backgroundImage, { height: 'var(--app-height, 100dvh)' }]"
   >
+    <div
+      aria-hidden="true"
+      class="status-bar-tint"
+    />
     <RouterView />
     <BackendSwitchToast />
     <BackendConnectionError />
     <BackendManager />
     <UpgradeCoreModal v-model="showUpgradeCoreModal" />
     <UpdateConfigModal v-model="showUpdateConfigModal" />
+    <DaeConfigModal
+      v-if="activeBackend?.type === 'dae'"
+      v-model="showDaeConfigModal"
+    />
     <ConfirmDialogHost />
     <div
       ref="toast"
@@ -172,6 +190,25 @@ useKeyboard()
 </template>
 
 <style>
+.status-bar-tint {
+  display: none;
+}
+
+@supports (-webkit-touch-callout: none) {
+  .status-bar-tint {
+    position: fixed;
+    top: 0;
+    right: 0;
+    left: 0;
+    z-index: 2147483647;
+    display: block;
+    height: 12px;
+    background-color: var(--status-bar-tint, var(--color-base-100));
+    opacity: 0.12;
+    pointer-events: none;
+  }
+}
+
 .app-toast-region {
   position: fixed;
   top: calc(0.75rem + env(safe-area-inset-top, 0px));

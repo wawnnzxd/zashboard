@@ -12,7 +12,7 @@
   ></div>
   <div
     ref="topBarRef"
-    class="bg-base-100 md:bg-base-100/80 border-base-300/50 sticky z-10 flex min-w-0 items-center gap-1 overflow-hidden shadow transition-all duration-300 md:backdrop-blur-xl"
+    class="bg-base-100 md:bg-base-100/80 border-base-300/50 overlay-glass sticky z-10 flex min-w-0 items-center gap-1 overflow-hidden shadow transition-all duration-300 md:backdrop-blur-xl"
     :class="isStuck ? 'mx-0 rounded-none px-4 pt-2 pb-1.5' : 'mx-3 rounded-xl p-1'"
     :style="{ top: isMiddleScreen ? '-1px' : `${ctrlsBottom - 1}px` }"
   >

@@ -37,6 +37,7 @@ export interface RulesPayload {
 
 export interface ConnectionsPayload {
   connections: ConnectionRawMessage[]
+  closed?: ConnectionRawMessage[]
   downloadTotal?: number
   uploadTotal?: number
 }
@@ -50,6 +51,23 @@ export interface TrafficSample {
 
 export interface MemorySample {
   inuse: number
+}
+
+export interface HistorySample {
+  at: number
+  value: number
+}
+
+export interface MetricsHistory {
+  download: HistorySample[]
+  upload: HistorySample[]
+  memory: HistorySample[]
+  connections: HistorySample[]
+}
+
+export interface ConnectionsFilter {
+  type?: 'tcp' | 'udp'
+  src?: string
 }
 
 export interface ConnectionAccessor {
@@ -88,7 +106,12 @@ export interface SystemDriver {
 export interface MetricsDriver {
   traffic(): Stream<TrafficSample>
   memory(): Stream<MemorySample>
+  history?(): Promise<MetricsHistory>
   fetchRuntimeStats(): Promise<HonkStats>
+}
+
+export interface EventsDriver {
+  subscribe(onEvent: (kind: string, payload: unknown) => void): Subscription
 }
 
 // fetch 的 signal 由 assembly 的 SessionResource 传入:换后端时真正 abort 在途请求、释放并发槽
@@ -133,14 +156,16 @@ export interface ConnectionsDriver {
   accessor: ConnectionAccessor
   subscribe(): Stream<ConnectionsPayload>
   disconnect(id: string): Promise<void>
-  disconnectAll(): Promise<void>
+  disconnectAll(filter?: ConnectionsFilter): Promise<void>
   block(id: string): Promise<void>
 }
 
 export interface Driver {
   type: BackendType
+  reset?: () => void
   system: SystemDriver
   metrics: MetricsDriver
+  events?: EventsDriver
   proxies: ProxiesDriver
   rules: RulesDriver
   config: ConfigDriver

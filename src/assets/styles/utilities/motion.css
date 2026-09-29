@@ -117,12 +117,6 @@
 .btn:not(:disabled):active {
   transform: scale(0.96);
 }
-.dock button {
-  transition: transform 0.16s var(--ease-out-strong);
-}
-.dock button:active {
-  transform: scale(0.9);
-}
 /* 侧栏导航项:上游 NavMenu 的 .nav-item 自带颜色/底色过渡(见上文),
    这里整条重写是为了把 transform 并进同一个 transition 列表 —— 只写 transform 会把那两条盖掉。
    限定在 .sidebar 内:分段 Tabs 也用 .nav-item,它们不缩放。 */
@@ -148,7 +142,6 @@
     filter: none;
   }
   .btn:not(:disabled):active,
-  .dock button:active,
   .sidebar .nav-item:active {
     transform: none;
   }

@@ -170,6 +170,9 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
+      // tldts 的 es6 源码版(公共后缀表是大段嵌套字面量)经本构建压缩后 263KB / gzip 111KB,
+      // 包里自带的预压缩 ESM 是同一份代码、同样的导出,只有 128KB / gzip 46KB。
+      tldts: 'tldts/dist/index.esm.min.js',
     },
   },
 })

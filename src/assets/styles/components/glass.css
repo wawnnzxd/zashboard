@@ -10,7 +10,7 @@
  *   表面(card/collapse/base-container/settings-grid) —— 身后只有静态环境光晕。
  *     模糊一片平滑渐变得到的还是那片渐变,所以**半透明填充=真玻璃的观感**,
  *     不付 backdrop-filter 的合成层代价。这不是省钱,是同效果的更优实现。
- *   镶边(ctrls-bar/sidebar/dock/modal/app-toast) —— 内容真的会从下面滚过,
+ *   镶边(ctrls-bar/sidebar/tab-bar/modal/app-toast) —— 内容真的会从下面滚过,
  *     必须真 blur+saturate 才成立;同屏至多几层,代价固定且可控。
  */
 
@@ -107,11 +107,12 @@
   box-shadow: inset -1px 0 0 var(--glass-border);
 }
 
-/* 底部 dock(窄屏导航):上游的 .dock 材质写在 HomePage.vue 的 <style> 里 —— 未分层、且打包
-   顺序在 main.css 之后,同特异性会反压这里。多带一层 .home-page 把特异性抬到 (0,2,0) 稳赢它;
-   与 appearance.css 的 `.custom-background :is(.dock)` 平级,由引入顺序让后者胜出(壁纸模式照旧)。
-   材质走统一令牌(tokens.css):高光在暗色主题随 light-dark() 自动收敛,不是写死的白色。 */
-.home-page .dock {
+/* 底部 tab-bar(窄屏导航,上游 3.29 起由 daisyUI .dock 改成自绘的 iOS 悬浮胶囊):上游材质写在
+   HomePage.vue 的 <style> 里 —— 未分层、且打包顺序在 main.css 之后,同特异性会反压这里。多带一层
+   .home-page 把特异性抬到 (0,2,0) 稳赢它;壁纸模式下 appearance.css 的 `.custom-background :is(.tab-bar)`
+   与之平级,由引入顺序让后者胜出(壁纸模式照旧)。这里只管材质(底色 / 模糊 / 描边 / 投影),
+   形状、尺寸、指示块都用上游的。材质走统一令牌(tokens.css):高光在暗色主题随 light-dark() 自动收敛。 */
+.home-page .tab-bar {
   background-color: var(--glass-chrome);
   -webkit-backdrop-filter: blur(20px) saturate(180%);
   backdrop-filter: blur(20px) saturate(180%);
@@ -145,7 +146,6 @@
   .base-container,
   .settings-grid,
   .modal-box,
-  .dock,
   .btn,
   .badge,
   .alert,
@@ -171,7 +171,7 @@
   .glass-chrome,
   .ctrls-bar,
   .modal-box,
-  .home-page .dock,
+  .home-page .tab-bar,
   .app-toast {
     background-color: var(--color-base-100);
     -webkit-backdrop-filter: none;

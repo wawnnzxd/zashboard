@@ -137,6 +137,8 @@ export const proxyLatencyTest = async (
   url = speedtestUrlWithDefault.value,
   timeout = speedtestTimeout.value,
 ) => {
+  if (!can('latencyTest')) return
+
   // 测速失败就是「这个节点不通」,用统一的 testFailedTip 说明,比抛出 HTTP 报文有用。
   // 内核的写响应已经把延迟给了我们,不需要再花一次全量 /proxies + /providers/proxies 往返
   // 去问同一个问题(上游在 finally 里回读)。回读除了浪费,还打开一整类竞态:in-flight 去重
@@ -232,12 +234,15 @@ const testLatencyOneByOneWithTip = async (
 }
 
 export const proxyGroupLatencyTest = async (proxyGroupName: string) => {
+  if (!can('latencyTest')) return
+
   const proxyNode = proxyMap.value[proxyGroupName]
   const all = (proxyNode.all ?? []).filter(isLatencyTestable)
   const url = getTestUrl(proxyGroupName)
 
   if (
     speedtestMode.value === SPEEDTEST_MODE.DASHBOARD &&
+    can('nodeLatencyTest') &&
     [PROXY_TYPE.Selector, PROXY_TYPE.LoadBalance, PROXY_TYPE.Smart].includes(
       proxyNode.type.toLowerCase() as PROXY_TYPE,
     )
@@ -308,7 +313,9 @@ export const proxyGroupLatencyTest = async (proxyGroupName: string) => {
 }
 
 export const allProxiesLatencyTest = async () => {
-  if (independentLatencyTest.value) {
+  if (!can('latencyTest')) return
+
+  if (independentLatencyTest.value || !can('nodeLatencyTest')) {
     const limit = pLimit(3)
 
     return await Promise.all(
